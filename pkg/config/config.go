@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func Load() (*Config, error) {
+func Init() (*Config, error) {
 	cfg := &Config{
 		app: appConfig{
 			Name:        GetStrEnv("APP_NAME", "alexia-ai"),
