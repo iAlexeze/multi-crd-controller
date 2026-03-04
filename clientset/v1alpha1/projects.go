@@ -18,7 +18,7 @@ type projectClient struct {
 var _ domain.ProjectInterface = (*projectClient)(nil)
 var _ domain.Component = (*projectClient)(nil)
 
-func (p *projectClient) NewProjectClient(kube *kubeclient.Kubeclient, namespace string) *projectClient {
+func NewProjectClient(kube *kubeclient.Kubeclient, namespace string) *projectClient {
 	return &projectClient{
 		kube:      kube,
 		namespace: namespace,
