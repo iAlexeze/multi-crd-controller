@@ -1,0 +1,56 @@
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-controller
+  namespace: ops-team-ns
+spec:
+  replicas: 2  # High availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Ensure at least one pod is always running
+  selector:
+    matchLabels:
+      app: project-controller
+  template:
+    metadata:
+      labels:
+        app: project-controller
+    spec:
+      terminationGracePeriodSeconds: 30  # Give time to release lease
+      serviceAccountName: project-controller
+      containers:
+      - name: controller
+        resources: {}
+        image: ialexeze/project-controller:1.0.1
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 5"]  # Extra time for cleanup
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NAMESPACE
+          value: "ops-team-ns"
+        - name: WORKERS
+          value: "5"
+        - name: APP_ENV
+          value: "staging"

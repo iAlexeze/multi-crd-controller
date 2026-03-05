@@ -5,23 +5,30 @@ import (
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )
 
 type projectClient struct {
-	restClient rest.Interface
-	kube       *kubeclient.Kubeclient
-	namespace  string
-	name       string
+	restClient     rest.Interface
+	kube           *kubeclient.Kubeclient
+	namespace      string
+	name           string
+	scheme         *runtime.Scheme
+	parameterCodec runtime.ParameterCodec
 }
 
 var _ domain.ProjectInterface = (*projectClient)(nil)
 var _ domain.Component = (*projectClient)(nil)
 
-func NewProjectClient(kube *kubeclient.Kubeclient, namespace string) *projectClient {
+func NewProjectClient(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, namespace string) *projectClient {
+
 	return &projectClient{
-		kube:      kube,
-		namespace: namespace,
+		name:           "projects",
+		kube:           kube,
+		namespace:      namespace,
+		scheme:         scheme,
+		parameterCodec: runtime.NewParameterCodec(scheme), // create a parameterCodec from scheme
 	}
 }
 

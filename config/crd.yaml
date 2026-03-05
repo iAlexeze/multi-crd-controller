@@ -3,9 +3,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-ialexeze.com/version: v0.20.1
-  name: projects.example.martin-helmich.de
+  name: projects.crd-example.ialexeze.ai
 spec:
-  group: example.martin-helmich.de
+  group: crd-example.ialexeze.ai
   names:
     kind: Project
     listKind: ProjectList

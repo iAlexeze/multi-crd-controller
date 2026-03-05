@@ -10,21 +10,21 @@ import (
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
 )
 
-var _ domain.Component = (*healthServer)(nil)
+var _ domain.Component = (*HealthServer)(nil)
 
-type healthServer struct {
+type HealthServer struct {
 	server *http.Server
 	ready  atomic.Bool
 	port   string
 	client string
 }
 
-func NewHealthServer(client, port string) *healthServer {
+func NewHealthServer(client, port string) *HealthServer {
 	if client == "" {
 		client = "service"
 	}
 
-	hs := &healthServer{
+	hs := &HealthServer{
 		client: client,
 		port:   port,
 	}
@@ -34,7 +34,7 @@ func NewHealthServer(client, port string) *healthServer {
 	return hs
 }
 
-func (h *healthServer) Start(ctx context.Context) error {
+func (h *HealthServer) Start(ctx context.Context) error {
 	if !strings.HasPrefix(h.port, ":") {
 		logger.Debug().Msgf("normalizing port from %s to :%s", h.port, h.port)
 		h.port = ":" + h.port
@@ -54,7 +54,7 @@ func (h *healthServer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (h *healthServer) Shutdown(ctx context.Context) {
+func (h *HealthServer) Shutdown(ctx context.Context) {
 	if h.server != nil {
 		if err := h.server.Shutdown(ctx); err != nil {
 			logger.Error().Err(err).Msg("health server shutdown error")
@@ -63,15 +63,15 @@ func (h *healthServer) Shutdown(ctx context.Context) {
 	h.ready.Store(false)
 }
 
-func (h *healthServer) Name() string {
+func (h *HealthServer) Name() string {
 	return "health server"
 }
 
-func (h *healthServer) SetReady() {
+func (h *HealthServer) SetReady() {
 	h.ready.Store(true)
 }
 
-func (h *healthServer) routes() *http.ServeMux {
+func (h *HealthServer) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.Handle("/health", h.logRouteMiddleware(http.HandlerFunc(h.healthHandler)))

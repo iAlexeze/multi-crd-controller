@@ -1,0 +1,67 @@
+services:
+  # Controller service
+  project-controller:
+    container_name: crd-controller
+    image: ialexeze/project-controller:1.0.0
+    ports:
+      - "5000:5000"  # Health check port
+    environment:
+      # Application
+      - APP_NAME=${APP_NAME:-project-controller}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+      - APP_ENV=${APP_ENV:-development}
+      
+      # Kubernetes - Using local kubeconfig for development
+      - KUBECONFIG=/home/appuser/.kube/config
+      - NAMESPACE=${NAMESPACE:-default}
+      - IN_CLUSTER=${IN_CLUSTER:-false}
+      
+      # Controller configuration
+      - WORKERS=${WORKERS:-3}
+      - DEFAULT_RESYNC=${DEFAULT_RESYNC:-30}
+      - LABEL_SELECTOR=${LABEL_SELECTOR:-app=alexia}
+      - FINALIZER=${FINALIZER:-alexia.ai/finalizer}
+      
+      # Leader election
+      - LEASE_DURATION=${LEASE_DURATION:-15}
+      - RENEW_DEADLINE=${RENEW_DEADLINE:-10}
+      - RETRY_PERIOD=${RETRY_PERIOD:-3}
+      
+      # Health server
+      - PORT=5000
+      - SRV_READ_TIMEOUT=${SRV_READ_TIMEOUT:-5}
+      - SRV_WRITE_TIMEOUT=${SRV_WRITE_TIMEOUT:-20}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    
+    volumes:
+      # Mount kubeconfig for local cluster access
+      - ${HOME}/.kube/config:/home/appuser/.kube/config:ro    
+    networks:
+      - crd-network
+    restart: unless-stopped
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits for development
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+# Networks
+networks:
+  crd-network:
+    name: crd-dev-network
+    driver: bridge

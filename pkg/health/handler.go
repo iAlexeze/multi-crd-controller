@@ -9,7 +9,7 @@ import (
 )
 
 // healthHandler handles health checks -> /health
-func (h *healthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HealthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 	h.writeResponse(responseReq{
 		writer:  w,
 		message: h.client + " is " + string(utils.StatusHealthy),
@@ -22,7 +22,7 @@ func (h *healthServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // readyHandler confirms whether a client is ready or not -> /ready
-func (h *healthServer) readyHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HealthServer) readyHandler(w http.ResponseWriter, r *http.Request) {
 	if !h.ready.Load() {
 		h.writeResponse(responseReq{
 			writer:  w,
@@ -48,7 +48,7 @@ func (h *healthServer) readyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // logRouteMiddleware logs every handler request
-func (h *healthServer) logRouteMiddleware(next http.Handler) http.HandlerFunc {
+func (h *HealthServer) logRouteMiddleware(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)

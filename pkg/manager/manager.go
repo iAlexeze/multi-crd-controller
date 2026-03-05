@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/health"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/utils"
 )
@@ -16,11 +17,13 @@ type Manager struct {
 	components []domain.Component
 	timeout    time.Duration
 	done       chan struct{}
+	hs         *health.HealthServer
 }
 
-func NewManager(timeout time.Duration) *Manager {
+func NewManager(hs *health.HealthServer, timeout time.Duration) *Manager {
 	return &Manager{
 		timeout: timeout,
+		hs:      hs,
 		done:    make(chan struct{}),
 	}
 }
@@ -41,6 +44,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	logger.Info().Msg("✅ All services started successfully")
+
+	m.setReady()
+	logger.Info().Msg("controller is ready...")
 
 	m.gracefulShutdown(mCtx, mCancel)
 	return nil
@@ -84,6 +90,11 @@ func (m *Manager) gracefulShutdown(ctx context.Context, cancel context.CancelFun
 func (m *Manager) Register(c domain.Component) {
 	m.components = append(m.components, c)
 	logger.Info().Msgf("%s registered", c.Name())
+}
+
+// setReady sets the controller ready after all startup is completed
+func (m *Manager) setReady() {
+	m.hs.SetReady()
 }
 
 // Listening to done channel

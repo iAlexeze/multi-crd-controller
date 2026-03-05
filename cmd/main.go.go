@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// create domain components and build manager
-	mgr := buildManager(cfg)
+	mgr := buildManager(cfg, scheme)
 
 	// Start all manager components
 	if err = mgr.Start(ctx); err != nil {

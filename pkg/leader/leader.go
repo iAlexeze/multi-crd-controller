@@ -9,15 +9,17 @@ import (
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/utils"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
 type leaderElection struct {
-	name string
-	kube *kubeclient.Kubeclient
-	run  func(context.Context)
+	name       string
+	kube       *kubeclient.Kubeclient
+	cancelFunc context.CancelFunc
+	run        func(context.Context)
 
 	opts Options
 }
@@ -42,19 +44,34 @@ func NewLeaderElection(kube *kubeclient.Kubeclient, run func(context.Context), o
 	return &leaderElection{
 		name: "resource-leader",
 		kube: kube,
+		run:  run,
 		opts: opts,
 	}
 }
 
 func (le *leaderElection) Start(ctx context.Context) error {
+	// Create a cancellable context for the leader election
+	leaderCtx, cancel := context.WithCancel(ctx)
+	le.cancelFunc = cancel
 
 	go func() {
-		leaderelection.RunOrDie(ctx, le.leaseConfig())
+		leaderelection.RunOrDie(leaderCtx, le.leaseConfig())
 	}()
 	return nil
 }
 
-func (le *leaderElection) Shutdown(ctx context.Context) {}
+func (le *leaderElection) Shutdown(ctx context.Context) {
+	logger.Info().Msg("🛑 Shutting down leader election...")
+
+	// Cancel the leader election context
+	if le.cancelFunc != nil {
+		le.cancelFunc()
+	}
+
+	// Give it a moment to release the lease
+	utils.Sleep(2)
+	logger.Info().Msg("✅ Leader election shut down")
+}
 
 func (le *leaderElection) Name() string {
 	return le.name
@@ -95,8 +112,16 @@ func (le *leaderElection) leaseLock() *resourcelock.LeaseLock {
 // Build callbacks
 func (le *leaderElection) callbacks() leaderelection.LeaderCallbacks {
 	return leaderelection.LeaderCallbacks{
-		OnStartedLeading: func(ctx context.Context) { le.run(ctx) },
-		OnStoppedLeading: func() { logger.Info().Msg("leader lost") },
+		OnStartedLeading: func(ctx context.Context) {
+			logger.Info().Msg("🏆 Became leader, starting controller...")
+			le.run(ctx)
+		},
+		OnStoppedLeading: func() {
+			logger.Info().Msg("👋 Stopped leading - lease released")
+		},
+		OnNewLeader: func(identity string) {
+			logger.Info().Msgf("👑 New leader elected: %s", identity)
+		},
 	}
 }
 

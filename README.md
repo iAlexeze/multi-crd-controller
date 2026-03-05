@@ -1,0 +1,596 @@
+# Kubernetes CRD Controller - Project Operator
+
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-326CE5.svg)](https://kubernetes.io/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A production-ready Kubernetes controller for managing `Project` custom resources, built with clean architecture, leader election, and graceful shutdown. This project extends the foundational work by [@martin-helmich](https://github.com/martin-helmich/kubernetes-crd-example) on Kubernetes CRD examples, transforming it into a scalable, enterprise-grade controller framework.
+
+## 🎯 **Overview**
+
+This controller manages `Project` custom resources in Kubernetes. It watches for Project CRDs and reconciles their state, ensuring external resources are properly provisioned and cleaned up. Built with extensibility in mind, it demonstrates:
+
+- Custom Resource Definition (CRD) creation and management
+- Kubernetes client-go informer patterns
+- Leader election for high availability
+- Workqueue with rate limiting for reliable processing
+- Graceful shutdown with context propagation
+- Health and readiness probes for production deployments
+
+## 🏗️ **Architecture**
+
+```mermaid
+flowchart TB
+ subgraph subGraph0["Kubernetes Cluster"]
+        CRD["Project CRD"]
+        API["Kubernetes API"]
+  end
+ subgraph subGraph1["Core Components"]
+        HS["Health Server"]
+        KC["KubeClient"]
+        PC["Project Client"]
+  end
+ subgraph subGraph2["Informer Layer"]
+        I["Informer"]
+        S[("Local Store")]
+        Q["Workqueue"]
+  end
+ subgraph subGraph3["Controller Layer"]
+        C["Controller"]
+        W1["Worker 1"]
+        W2["Worker 2"]
+        W3["Worker N"]
+  end
+ subgraph subGraph4["High Availability"]
+        LE["Leader Election"]
+  end
+ subgraph subGraph5["Controller Manager"]
+    direction TB
+        M["Manager"]
+        subGraph1
+        subGraph2
+        subGraph3
+        subGraph4
+  end
+    CRD L_CRD_API_0@--> API
+    API L_API_KC_0@--> KC
+    KC L_KC_PC_0@--> PC
+    PC L_PC_I_0@--> I
+    I L_I_S_0@--> S & Q
+    Q L_Q_C_0@--> C
+    C L_C_W1_0@--> W1 & W2 & W3
+    W1 L_W1_M_0@--> M
+    W2 L_W2_M_0@--> M
+    W3 L_W3_M_0@--> M
+    M L_M_HS_0@--> HS
+    LE L_LE_C_0@--> C
+
+    style CRD fill:#C8E6C9,stroke:#333,stroke-width:2px,color:#000000
+    style API fill:#00C853,stroke:#333,stroke-width:2px,color:#FFFFFF
+    style HS fill:#00C853,stroke:#333,stroke-width:2px,color:#FFFFFF
+    style LE fill:#C8E6C9,stroke:#333,stroke-width:2px,color:#000000
+    style M fill:#FF6D00,stroke:#333,stroke-width:4px,color:#FFFFFF
+
+    L_CRD_API_0@{ animation: fast } 
+    L_API_KC_0@{ animation: fast } 
+    L_KC_PC_0@{ animation: fast } 
+    L_PC_I_0@{ animation: fast } 
+    L_I_S_0@{ animation: fast } 
+    L_I_Q_0@{ animation: fast } 
+    L_Q_C_0@{ animation: fast } 
+    L_C_W1_0@{ animation: fast } 
+    L_C_W2_0@{ animation: fast } 
+    L_C_W3_0@{ animation: fast } 
+    L_W1_M_0@{ animation: fast } 
+    L_W2_M_0@{ animation: fast } 
+    L_W3_M_0@{ animation: fast } 
+    L_M_HS_0@{ animation: fast } 
+    L_LE_C_0@{ animation: fast }
+```
+
+## ✨ **Features**
+
+- **Custom Resource Management**: Full lifecycle management for `Project` CRDs
+- **Leader Election**: High availability with automatic failover
+- **Workqueue with Rate Limiting**: Prevents reconcile storms with exponential backoff
+- **Configurable Workers**: Scale processing horizontally
+- **Health & Readiness Probes**: Kubernetes liveness and readiness endpoints
+- **Graceful Shutdown**: Proper cleanup on termination signals
+- **Structured Logging**: JSON-formatted logs for easy aggregation
+- **Context Propagation**: Respects cancellation throughout the stack
+- **Tombstone Handling**: Gracefully handles deleted objects
+- **Environment-based Configuration**: Flexible config via `.env` or system variables
+
+## 📋 **Prerequisites**
+
+- Go 1.21 or higher
+- Kubernetes cluster 1.28+ (for testing)
+- kubectl configured with cluster access
+- Docker (for building container images)
+
+## 🚀 **Quick Start**
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/ialexeze/kubernetes-crd-example.git
+cd kubernetes-crd-example
+```
+
+### 2. Configure Environment
+Create a `.env` file (or use system environment variables):
+
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Edit with your configuration
+vim .env
+```
+
+### 3. Install CRD
+```bash
+kubectl apply -f kubernetes/crd.yaml
+```
+
+### 4. Run Locally
+```bash
+# Make sure you're in the right namespace context
+kubectl config set-context --current --namespace=your-namespace
+
+# Run the controller
+go run ./cmd/
+```
+
+> **⚠️ Important**: Ensure your current kubectl context is set to the same namespace as configured in `NAMESPACE` env variable. The controller will only watch resources in this namespace.
+
+### 5. Create Project Resources
+```bash
+# In another terminal
+kubectl apply -f kubernetes/project.yaml
+```
+
+### 6. Watch the Magic Happen
+```bash
+# Watch controller logs
+kubectl logs -f deployment/project-controller -n your-namespace
+
+# Check projects
+kubectl get projects
+kubectl get projects -o yaml
+```
+
+## ⚙️ **Configuration**
+
+The controller supports flexible configuration through environment variables, making it suitable for both development (with `.env` files) and production (with system environment variables).
+
+### Environment Variables
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| **Application** |
+| `APP_NAME` | Application name | `kubernetes-crd-example` | No |
+| `APP_VERSION` | Application version | `1.0.0` | No |
+| `APP_ENV` | Environment (dev/staging/prod) | `development` | No |
+| **Kubernetes** |
+| `KUBECONFIG` | Path to kubeconfig file | `""` | No* |
+| `MASTER_URL` | Kubernetes API URL | `""` | No* |
+| `IN_CLUSTER` | Use in-cluster config | `false` | No |
+| `CLUSTER_NAME` | Cluster identifier | `kubernetes-crd-example` | No |
+| `NAMESPACE` | Namespace to watch | `default` | **Yes** |
+| **Controller** |
+| `DEFAULT_RESYNC` | Informer resync period (seconds) | `15` | No |
+| `FINALIZER` | Finalizer string | `alexia.ai/finalizer` | No |
+| `LABEL_SELECTOR` | Label selector for filtering | `app=alexia` | No |
+| `WORKERS` | Number of reconciler workers | `3` | No |
+| **Health Server** |
+| `PORT` | Health server port | `5000` | No |
+| `SRV_READ_TIMEOUT` | Read timeout (seconds) | `5` | No |
+| `SRV_WRITE_TIMEOUT` | Write timeout (seconds) | `20` | No |
+| **Leader Election** |
+| `LEASE_DURATION` | Leader lease duration (seconds) | `30` | No |
+| `RENEW_DEADLINE` | Leader renew deadline (seconds) | `6` | No |
+| `RETRY_PERIOD` | Leader retry period (seconds) | `2` | No |
+
+\* Either `KUBECONFIG`/`MASTER_URL` or `IN_CLUSTER=true` must be set
+
+### .env File (Development)
+
+For local development, create a `.env` file in the project root:
+
+```bash
+# .env example
+APP_NAME=project-controller
+APP_VERSION=1.0.0
+APP_ENV=development
+
+# Kubernetes
+KUBECONFIG=${HOME}/.kube/config
+NAMESPACE=default
+WORKERS=3
+DEFAULT_RESYNC=30
+
+# Health server
+PORT=5000
+
+# Leader election
+LEASE_DURATION=15
+RENEW_DEADLINE=10
+RETRY_PERIOD=3
+```
+
+The controller automatically loads `.env` files using `godotenv`. In production, you can set these same variables as system environment variables in your container.
+
+## 📖 **API Reference**
+
+### Project CRD
+
+```yaml
+apiVersion: crd-example.ialexeze.ai/v1alpha1
+kind: Project
+metadata:
+  name: example-project
+  namespace: default
+spec:
+  replicas: 3                    # Number of desired replicas
+  # Additional fields as needed
+status:
+  availableReplicas: 3           # Current ready replicas
+  phase: "Running"                # Current phase
+  conditions:                     # Standard condition array
+    - type: "Ready"
+      status: "True"
+      lastTransitionTime: "2024-01-01T00:00:00Z"
+      reason: "AllReplicasReady"
+      message: "All 3 replicas are ready"
+```
+
+## 🔧 **Component Deep Dive**
+
+### 1. **Configuration** (`pkg/config`)
+Environment-based configuration with validation:
+```go
+cfg, err := config.Init() // Automatically loads .env file
+```
+
+### 2. **Health Server** (`pkg/health`)
+Provides liveness and readiness endpoints:
+- `/health` - Returns 200 when the service is running
+- `/ready` - Returns 200 only after all components are ready
+
+### 3. **KubeClient** (`pkg/kubeclient`)
+Wraps Kubernetes client operations:
+- Built-in types via `clientset`
+- CRD operations via `restClient` with custom scheme
+
+### 4. **Project Client** (`clientset/v1alpha1`)
+Type-safe client for Project CRUD operations:
+```go
+projects, err := client.Projects(namespace).List(ctx, metav1.ListOptions{})
+project, err := client.Projects(namespace).Get(ctx, name, metav1.GetOptions{})
+```
+
+### 5. **Informer** (`pkg/informer`)
+Watches Project resources and maintains a local cache:
+- List/Watch with the Kubernetes API
+- Thread-safe store for quick access
+- Workqueue for event processing
+- Automatic resync period
+
+### 6. **Controller** (`pkg/controller`)
+Processes events from the queue:
+- Manages worker goroutines
+- Executes reconciliation logic
+- Handles deletions with tombstone support
+- Rate limiting on errors
+
+### 7. **Leader Election** (`pkg/leader`)
+Ensures only one instance reconciles:
+- Acquires lease via Kubernetes coordination API
+- Only leader runs the controller
+- Automatic failover
+
+### 8. **Manager** (`pkg/manager`)
+Orchestrates all components:
+- Ordered startup and shutdown
+- Graceful signal handling
+- Readiness coordination
+
+## 🚀 **Extending the Controller**
+
+The controller is designed to be easily extended for different use cases. The main extension point is the reconciliation logic in [Reconcile.go](./pkg/controller/reconcile.go)
+
+```go
+// pkg/controller/reconcile.go
+package controller
+
+import (
+    "context"
+    "github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
+)
+
+// reconcileNormal handles the normal reconciliation logic
+// Override this for custom business logic
+func (c *Controller) reconcileNormal(ctx context.Context, project *v1alpha1.Project) error {
+    // TODO: Add your custom logic here
+    // Examples:
+    // - Provision external resources (databases, buckets)
+    // - Update dependent Kubernetes resources
+    // - Call external APIs
+    // - Update status conditions
+    
+    logger.Debug().Msgf("Normal reconciliation for %s", project.Name)
+    return nil
+}
+
+// handleDeletion handles cleanup when a project is deleted
+// Override this for custom cleanup logic
+func (c *Controller) handleDeletion(ctx context.Context, project *v1alpha1.Project) error {
+    // TODO: Add your cleanup logic here
+    // Examples:
+    // - Delete external resources
+    // - Remove finalizers
+    // - Notify external systems
+    
+    logger.Info().Msgf("Handling deletion for %s", project.Name)
+    return nil
+}
+```
+
+### Creating a New Resource Type
+
+To add support for a new CRD type:
+1. Generate new client files in `clientset/`
+2. Create a new informer in `pkg/informer/`
+3. Implement a new controller or extend existing one
+4. Register in `buildManager()`
+
+## 💓 **Health Checks**
+
+The health server provides crucial Kubernetes probe endpoints:
+
+### Before Readiness (Starting Up)
+```json
+curl -sS localhost:5000/ready | jq
+{
+  "data": {
+    "client": "projects",
+    "status": 500
+  },
+  "meta": {
+    "message": "projects is not ready",
+    "details": {
+      "service": "projects",
+      "status": "not ready"
+    }
+  }
+}
+```
+
+### After Full Startup
+```json
+curl -sS localhost:5000/ready | jq
+{
+  "data": {
+    "client": "projects",
+    "status": 200
+  },
+  "meta": {
+    "message": "projects is ready",
+    "details": {
+      "service": "projects",
+      "status": "running"
+    }
+  }
+}
+```
+
+### Liveness Check
+```json
+curl -sS localhost:5000/health | jq
+{
+  "data": {
+    "client": "projects",
+    "status": 200
+  },
+  "meta": {
+    "message": "projects is healthy",
+    "details": {
+      "service": "projects",
+      "status": "online"
+    }
+  }
+}
+```
+
+## 🔄 **Graceful Shutdown**
+
+The manager handles termination signals (SIGINT, SIGTERM) gracefully:
+
+```bash
+^C
+{"level":"info","time":1772677012,"message":"received shutdown signal: interrupt"}
+{"level":"info","time":1772677012,"message":"shutting down: health server..."}
+{"level":"info","time":1772677012,"message":"health server status: offline"}
+{"level":"info","time":1772677012,"message":"shutting down: kubeclient..."}
+{"level":"info","time":1772677012,"message":"kubeclient status: offline"}
+{"level":"info","time":1772677012,"message":"shutting down: projects..."}
+{"level":"info","time":1772677012,"message":"projects status: offline"}
+{"level":"info","time":1772677012,"message":"shutting down: smart informer..."}
+{"level":"info","time":1772677012,"message":"shutting down informer"}
+{"level":"info","time":1772677012,"message":"smart informer status: offline"}
+{"level":"info","time":1772677012,"message":"shutting down: smart controller..."}
+{"level":"info","time":1772677012,"message":"shutting down controller"}
+{"level":"info","time":1772677012,"message":"smart controller status: offline"}
+{"level":"info","time":1772677012,"message":"shutting down: resource-leader..."}
+{"level":"info","time":1772677012,"message":"resource-leader status: offline"}
+{"level":"info","time":1772677012,"message":"⚠️ All services shut down gracefully"}
+```
+
+## 📦 **Deployment**
+
+### Build Container Image
+```bash
+docker build -t your-registry/project-controller:latest .
+docker push your-registry/project-controller:latest
+```
+
+### Deploy to Kubernetes
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-controller
+  namespace: your-namespace
+spec:
+  replicas: 2  # High availability
+  selector:
+    matchLabels:
+      app: project-controller
+  template:
+    metadata:
+      labels:
+        app: project-controller
+    spec:
+      serviceAccountName: project-controller
+      containers:
+      - name: controller
+        image: your-registry/project-controller:latest
+        ports:
+        - containerPort: 5000
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NAMESPACE
+          value: "your-namespace"
+        - name: WORKERS
+          value: "3"
+```
+
+### Required RBAC
+```yaml
+# rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: project-controller
+  namespace: your-namespace
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: project-controller
+rules:
+- apiGroups: ["crd-example.ialexeze.ai"]
+  resources: ["projects"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["crd-example.ialexeze.ai"]
+  resources: ["projects/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: project-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: project-controller
+subjects:
+- kind: ServiceAccount
+  name: project-controller
+  namespace: your-namespace
+```
+
+## 🔍 **Troubleshooting**
+
+### Common Issues
+
+1. **"projects in store: 0" even after creating resources**
+   - Check namespace: `kubectl config current-context` and ensure it matches `NAMESPACE` env
+   - Verify informer sync: Look for "informer cache synced" in logs
+
+2. **Leader election not working**
+   - Check RBAC permissions for leases
+   - Verify `LEASE_DURATION` settings
+
+3. **REST client nil errors**
+   - Ensure `IN_CLUSTER` is set correctly
+   - Check `KUBECONFIG` path validity
+
+### Debugging Tips
+
+```bash
+# Enable debug logging
+export LOG_LEVEL=debug
+
+# Check controller logs
+kubectl logs -f deployment/project-controller
+
+# Verify CRD exists
+kubectl get crd projects.crd-example.ialexeze.ai
+
+# Check leader lease
+kubectl get leases -n your-namespace
+```
+
+## 🤝 **Contributing**
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Add tests for new features
+- Update documentation
+- Follow Go best practices
+- Use structured logging
+- Handle errors gracefully
+
+## 🙏 **Acknowledgments**
+
+This project is an extension and production-hardening of the excellent work by [**@martin-helmich**](https://github.com/martin-helmich) in his [kubernetes-crd-example](https://github.com/martin-helmich/kubernetes-crd-example) repository. His foundational example provided the clear patterns for:
+
+- CRD type definitions
+- Basic client generation
+- Informer setup patterns
+
+Building upon this foundation, this implementation adds:
+- **Manager pattern** with component lifecycle
+- **Leader election** for high availability
+- **Workqueue** with rate limiting
+- **Health checks** with readiness coordination
+- **Graceful shutdown** handling
+- **Configurable workers** for scaling
+- **Production logging** with structured output
+- **Environment-based configuration** via `.env` and system variables
+- **Extensible reconciliation** pattern
+
+Special thanks to the Kubernetes community for the excellent client-go libraries and patterns.
+
+## 📄 **License**
+
+MIT License - see [LICENSE](LICENSE) file for details
+
+---
+
+**Built with ❤️ by the Kubernetes Community**

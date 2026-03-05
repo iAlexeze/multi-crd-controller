@@ -6,76 +6,115 @@ import (
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 )
 
-type informer struct {
-	name       string
-	namespace  string
-	clientSet  domain.ProjectsV1Alpha1nterface
-	resync     time.Duration
-	store      cache.Store
-	controller cache.Controller
-	queue      cache.Queue
+type Informer struct {
+	name          string
+	namespace     string
+	projectClient domain.ProjectsV1Alpha1nterface
+	resync        time.Duration
+	store         cache.Store
+	controller    cache.Controller
+	queue         workqueue.TypedRateLimitingInterface[string]
 }
 
-var _ domain.Component = (*informer)(nil)
+var _ domain.Component = (*Informer)(nil)
 
 func NewInformer(
-	clientSet domain.ProjectsV1Alpha1nterface,
-	namespace string,
+	projectClient domain.ProjectsV1Alpha1nterface,
 	resync time.Duration,
-) *informer {
-	return &informer{
-		name:      "smart informer",
-		namespace: namespace,
-		clientSet: clientSet,
-		resync:    resync,
+) *Informer {
+	return &Informer{
+		name:          "smart informer",
+		projectClient: projectClient,
+		resync:        resync,
+		queue:         workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 }
 
-func (i *informer) Start(ctx context.Context) error {
-	i.store, i.controller = i.watchResources()
-
+func (i *Informer) Start(ctx context.Context) error {
+	i.namespace = i.projectClient.Namespace()
+	i.store, i.controller = i.watchResources(ctx)
 	return nil
 }
 
-func (i *informer) watchResources() (cache.Store, cache.Controller) {
-	return cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
-				return i.clientSet.Projects(i.namespace).List(lo)
+func (i *Informer) watchResources(ctx context.Context) (cache.Store, cache.Controller) {
+	return cache.NewInformerWithOptions(
+		cache.InformerOptions{
+			ListerWatcher: &cache.ListWatch{
+				ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
+					logger.Debug().Msg("📋 ListFunc called")
+					result, err = i.projectClient.Projects(i.namespace).List(ctx, lo)
+					if err != nil {
+						return nil, err
+					}
+					count := len(result.(*v1alpha1.ProjectList).Items)
+					logger.Debug().Msgf("📋 ListFunc returned %d items", count)
+					return result, err
+				},
+				WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+					logger.Debug().Msg("👀 WatchFunc called - establishing watch")
+					w, err := i.projectClient.Projects(i.namespace).Watch(ctx, lo)
+					if err != nil {
+						return nil, err
+					}
+					logger.Debug().Msg("👀 Watch established successfully")
+					return w, err
+				},
 			},
-			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return i.clientSet.Projects(i.namespace).Watch(lo)
+			ObjectType: &v1alpha1.Project{},
+			Handler: cache.ResourceEventHandlerFuncs{
+				AddFunc:    func(obj interface{}) { i.enqueue(obj) },
+				UpdateFunc: func(oldObj, newObj interface{}) { i.enqueue(newObj) },
+				DeleteFunc: func(obj interface{}) { i.enqueue(obj) },
 			},
-		},
-		&v1alpha1.Project{},
-		i.resync,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(obj interface{}) { i.enqueue(obj) },
-			UpdateFunc: func(oldObj, newObj interface{}) { i.enqueue(newObj) },
-			DeleteFunc: func(obj interface{}) { i.enqueue(obj) },
+			ResyncPeriod: i.resync,
 		},
 	)
 }
 
-func (i *informer) enqueue(obj interface{}) {}
+// enqueue adds the object's key to the workqueue
+func (i *Informer) enqueue(obj interface{}) {
+	// Handle tombstone (deleted objects)
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tombstone.Obj
+	}
 
-func (i *informer) Shutdown(ctx context.Context) {}
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to get key")
+		return
+	}
+
+	i.queue.Add(key)
+	logger.Debug().Msgf("Enqueued: %s", key)
+}
+
+// Shutdown gracefully stops the informer
+func (i *Informer) Shutdown(ctx context.Context) {
+	logger.Info().Msg("shutting down informer")
+	i.queue.ShutDown()
+}
 
 // Methods
-func (i *informer) Controller() cache.Controller {
+func (i *Informer) Controller() cache.Controller {
 	return i.controller
 }
 
-func (i *informer) Store() cache.Store {
+func (i *Informer) Queue() workqueue.TypedRateLimitingInterface[string] {
+	return i.queue
+}
+
+func (i *Informer) Store() cache.Store {
 	return i.store
 }
 
-func (i *informer) Name() string {
+func (i *Informer) Name() string {
 	return i.name
 }

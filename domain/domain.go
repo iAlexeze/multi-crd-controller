@@ -27,14 +27,15 @@ type Component interface {
 // func (c *componentName) Name() string {}
 
 type ProjectInterface interface {
-	List(opts metav1.ListOptions) (*v1alpha1.ProjectList, error)
-	Get(name string, options metav1.GetOptions) (*v1alpha1.Project, error)
-	Create(*v1alpha1.Project) (*v1alpha1.Project, error)
-	Watch(opts metav1.ListOptions) (watch.Interface, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*v1alpha1.ProjectList, error)
+	Get(ctx context.Context, name string, options metav1.GetOptions) (*v1alpha1.Project, error)
+	Create(ctx context.Context, project *v1alpha1.Project) (*v1alpha1.Project, error)
+	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
 	Namespace() string
 	// ...
 }
 
 type ProjectsV1Alpha1nterface interface {
 	Projects(namespace string) ProjectInterface
+	Namespace() string
 }

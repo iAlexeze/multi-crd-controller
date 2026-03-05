@@ -2,10 +2,14 @@ package kubeclient
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -25,14 +29,20 @@ type Kubeclient struct {
 type Options struct {
 	Kubeconfig string
 	Masterurl  string
+	Scheme     *runtime.Scheme
 }
 
 var _ domain.Component = (*Kubeclient)(nil)
 
 func NewKubeclient(isCustom bool, opts Options) *Kubeclient {
+	if !isCustom && opts.Scheme == nil {
+		opts.Scheme = scheme.Scheme
+	}
+
 	return &Kubeclient{
-		name: "kubeclient",
-		Opts: opts,
+		name:     "kubeclient",
+		isCustom: isCustom,
+		Opts:     opts,
 	}
 }
 
@@ -46,17 +56,28 @@ func (k *Kubeclient) Start(ctx context.Context) error {
 	k.restConfig = cfg
 
 	// Build clientset and restClient conditonally
+	logger.Debug().Msg("creating clients...")
+
+	// Default
+	logger.Info().Msg("clientset for leader election")
+	k.clientset, err = kubernetes.NewForConfig(k.restConfig)
+	if err != nil {
+		return err
+	}
+
 	if k.isCustom {
+		logger.Info().Msg("rest client")
 		k.restClient, err = k.buildRestClient()
 		if err != nil {
 			return err
 		}
-	} else {
-		k.clientset, err = kubernetes.NewForConfig(k.restConfig)
-		if err != nil {
-			return err
+
+		// Add scheme
+		if k.Opts.Scheme == nil {
+			return fmt.Errorf("scheme not defined: custom resource scheme cannot be nil")
 		}
 	}
+
 	return nil
 }
 
@@ -76,7 +97,7 @@ func (k *Kubeclient) buildRestClient() (*rest.RESTClient, error) {
 	}
 
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	config.NegotiatedSerializer = serializer.NewCodecFactory(k.Opts.Scheme).WithoutConversion()
 	config.UserAgent = rest.DefaultKubernetesUserAgent()
 
 	return rest.RESTClientFor(&config)

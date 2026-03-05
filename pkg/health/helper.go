@@ -14,7 +14,7 @@ type responseReq struct {
 	details utils.H
 }
 
-func (h *healthServer) writeResponse(req responseReq) {
+func (h *HealthServer) writeResponse(req responseReq) {
 	req.writer.Header().Set(utils.ContentType, utils.JSONContentType)
 	req.writer.WriteHeader(req.status)
 
