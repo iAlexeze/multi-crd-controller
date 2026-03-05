@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )

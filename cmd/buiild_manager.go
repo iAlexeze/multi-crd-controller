@@ -1,19 +1,19 @@
 package main
 
 import (
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/controller"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/events"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/health"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/informer"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/config"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/controller"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/events"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/health"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/informer"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/kubeclient"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
-	clientV1alpha1 "github.com/ialexeze/kubernetes-crd-example/pkg/config/clientset/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/manager"
+	projectTypev1 "github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
+	projectsClientV1alpha1 "github.com/ialexeze/multi-crd-controller/pkg/config/clientset/project/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/manager"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -33,7 +33,7 @@ func buildManager(cfg *config.Config) *startup {
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		logger.Fatal().Err(err).Msg("failed to add client-go scheme")
 	}
-	if err := v1alpha1.AddToScheme(scheme); err != nil {
+	if err := projectTypev1.AddToScheme(scheme); err != nil {
 		logger.Fatal().Err(err).Msg("failed to add CRD scheme")
 	}
 
@@ -53,7 +53,7 @@ func buildManager(cfg *config.Config) *startup {
 	components = append(components, kube)
 
 	// projects
-	projects := clientV1alpha1.NewProjectClient(kube, scheme, cfg.Cluster().Namespace)
+	projects := projectsClientV1alpha1.NewProjectClient(kube, scheme, cfg.Cluster().Namespace)
 	components = append(components, projects)
 
 	// informer
@@ -72,9 +72,9 @@ func buildManager(cfg *config.Config) *startup {
 		cfg.Cluster().Workers,
 		controller.CustomOptions{
 			IsCustom: true,
-			Group:    v1alpha1.GroupName,
-			Kind:     v1alpha1.GroupKind,
-			Version:  v1alpha1.GroupVersion,
+			Group:    projectTypev1.GroupName,
+			Kind:     projectTypev1.GroupKind,
+			Version:  projectTypev1.GroupVersion,
 		},
 	)
 	components = append(components, ctrl) // Needed to get the controller informer synced and ready for manager to finish infrastructure setup

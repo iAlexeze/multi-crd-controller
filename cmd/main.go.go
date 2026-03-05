@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/leader"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/config"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/leader"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 )
 
 func main() {

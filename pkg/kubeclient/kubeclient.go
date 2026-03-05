@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	projectTypeV1 "github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -92,8 +92,8 @@ func (k *Kubeclient) buildRestClient() (*rest.RESTClient, error) {
 	config := *k.restConfig
 
 	config.ContentConfig.GroupVersion = &schema.GroupVersion{
-		Group:   v1alpha1.GroupName,
-		Version: v1alpha1.GroupVersion,
+		Group:   projectTypeV1.GroupName,
+		Version: projectTypeV1.GroupVersion,
 	}
 
 	config.APIPath = "/apis"

@@ -3,9 +3,9 @@ package v1alpha1
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )

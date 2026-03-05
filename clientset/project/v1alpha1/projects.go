@@ -3,8 +3,8 @@ package v1alpha1
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/kubeclient"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 )

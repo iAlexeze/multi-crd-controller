@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/config"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 )
 
 var _ domain.Component = (*HealthServer)(nil)

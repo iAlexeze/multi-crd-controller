@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	projectTypev1 "github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -62,9 +62,9 @@ func (c *Controller) reconcile(ctx context.Context, key string) error {
 	}
 
 	// Type assert to project
-	project, ok := obj.(*v1alpha1.Project)
+	project, ok := obj.(*projectTypev1.Project)
 	if !ok {
-		return fmt.Errorf("expected *v1alpha1.Project, got %T", obj)
+		return fmt.Errorf("expected *projectTypev1.Project, got %T", obj)
 	}
 
 	// Your reconciliation logic here
@@ -81,7 +81,7 @@ func (c *Controller) reconcile(ctx context.Context, key string) error {
 	return c.reconcileNormal(ctx, project)
 }
 
-func (c *Controller) reconcileNormal(ctx context.Context, project *v1alpha1.Project) error {
+func (c *Controller) reconcileNormal(ctx context.Context, project *projectTypev1.Project) error {
 	// Add your business logic here
 	// e.g., ensure dependent resources exist, update status, etc.
 
@@ -97,7 +97,7 @@ func (c *Controller) reconcileNormal(ctx context.Context, project *v1alpha1.Proj
 	return nil
 }
 
-func (c *Controller) handleDeletion(ctx context.Context, project *v1alpha1.Project) error {
+func (c *Controller) handleDeletion(ctx context.Context, project *projectTypev1.Project) error {
 	logger.Info().Msgf("Handling deletion for %s", project.Name)
 	// Add cleanup logic here
 	// e.g., delete external resources, remove finalizers

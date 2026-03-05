@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/utils"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/utils"
 )
 
 // healthHandler handles health checks -> /health

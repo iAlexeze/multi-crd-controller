@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	projectTypeV1 "github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -54,7 +54,7 @@ func (i *Informer) watchResources(ctx context.Context) (cache.Store, cache.Contr
 					if err != nil {
 						return nil, err
 					}
-					count := len(result.(*v1alpha1.ProjectList).Items)
+					count := len(result.(*projectTypeV1.ProjectList).Items)
 					logger.Debug().Msgf("📋 ListFunc returned %d items", count)
 					return result, err
 				},
@@ -68,7 +68,7 @@ func (i *Informer) watchResources(ctx context.Context) (cache.Store, cache.Contr
 					return w, err
 				},
 			},
-			ObjectType: &v1alpha1.Project{},
+			ObjectType: &projectTypeV1.Project{},
 			Handler: cache.ResourceEventHandlerFuncs{
 				AddFunc:    func(obj interface{}) { i.enqueue(obj) },
 				UpdateFunc: func(oldObj, newObj interface{}) { i.enqueue(newObj) },

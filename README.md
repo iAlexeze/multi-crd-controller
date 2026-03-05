@@ -341,7 +341,8 @@ package controller
 
 import (
     "context"
-    "github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
+    projectTypev1 "github.com/ialexeze/multi-crd-controller/api/types/projects/v1alpha1"
+
     corev1 "k8s.io/api/core/v1"
 )
 

@@ -7,10 +7,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/health"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/utils"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/health"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/utils"
 )
 
 type Manager struct {
