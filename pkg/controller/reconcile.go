@@ -6,6 +6,7 @@ import (
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -84,6 +85,12 @@ func (c *Controller) reconcileNormal(ctx context.Context, project *v1alpha1.Proj
 	// Add your business logic here
 	// e.g., ensure dependent resources exist, update status, etc.
 
+	c.events.Recorder().Eventf(
+		project,
+		corev1.EventTypeNormal,
+		"ProjectReconciled",
+		"%s project reconciled successfully", project.Name,
+	)
 	logger.Debug().Msgf("Normal reconciliation for %s", project.Name)
 	return nil
 }
@@ -92,5 +99,13 @@ func (c *Controller) handleDeletion(ctx context.Context, project *v1alpha1.Proje
 	logger.Info().Msgf("Handling deletion for %s", project.Name)
 	// Add cleanup logic here
 	// e.g., delete external resources, remove finalizers
+
+	// Emit events
+	c.events.Recorder().Eventf(
+		project,
+		corev1.EventTypeWarning,
+		"ProjectDelete",
+		"%s project deleted from %s namespace", project.Name, project.Namespace,
+	)
 	return nil
 }

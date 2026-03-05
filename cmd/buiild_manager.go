@@ -6,6 +6,7 @@ import (
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/controller"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/events"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/health"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/informer"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
@@ -40,13 +41,18 @@ func buildManager(cfg *config.Config, scheme *runtime.Scheme) *manager.Manager {
 	informer := informer.NewInformer(projects, cfg.Cluster().DefaultResync)
 	components = append(components, informer)
 
+	// events
+	events := events.NewRecorder(kube, scheme, events.Options{Component: cfg.App().Name})
+	components = append(components, events)
+
 	// controller
-	ctrl := controller.NewController(informer, cfg.Cluster().Workers)
+	ctrl := controller.NewController(informer, events, cfg.Cluster().Workers)
 	components = append(components, ctrl)
 
 	// leader election
 	leader := leader.NewLeaderElection(
 		kube,
+		events,
 		func(ctx context.Context) { ctrl.Run(ctx) }, // controller run
 		leader.Options{
 			Namespace:     cfg.Cluster().Namespace,

@@ -24,7 +24,7 @@ spec:
       containers:
       - name: controller
         resources: {}
-        image: ialexeze/project-controller:1.0.1
+        image: ialexeze/project-controller:1.0.2
         lifecycle:
           preStop:
             exec:

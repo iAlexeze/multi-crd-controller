@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/events"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/informer"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -16,6 +17,7 @@ import (
 type Controller struct {
 	name     string
 	informer *informer.Informer
+	events   *events.Recorder
 	queue    workqueue.TypedRateLimitingInterface[string]
 	workers  int
 }
@@ -24,10 +26,12 @@ var _ domain.Component = (*Controller)(nil)
 
 func NewController(
 	informer *informer.Informer,
+	events *events.Recorder,
 	workers int,
 ) *Controller {
 	return &Controller{
 		name:     "smart Controller",
+		events:   events,
 		informer: informer,
 		workers:  workers,
 	}

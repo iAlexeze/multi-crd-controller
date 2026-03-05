@@ -7,10 +7,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/events"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/utils"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
@@ -18,6 +20,7 @@ import (
 type leaderElection struct {
 	name       string
 	kube       *kubeclient.Kubeclient
+	events     *events.Recorder
 	cancelFunc context.CancelFunc
 	run        func(context.Context)
 
@@ -36,16 +39,22 @@ type Options struct {
 
 var _ domain.Component = (*leaderElection)(nil)
 
-func NewLeaderElection(kube *kubeclient.Kubeclient, run func(context.Context), opts Options) *leaderElection {
+func NewLeaderElection(
+	kube *kubeclient.Kubeclient,
+	events *events.Recorder,
+	run func(context.Context),
+	opts Options,
+) *leaderElection {
 	if opts.Namespace == "" {
 		opts.Namespace = "default"
 	}
 
 	return &leaderElection{
-		name: "resource-leader",
-		kube: kube,
-		run:  run,
-		opts: opts,
+		name:   "resource-leader",
+		events: events,
+		kube:   kube,
+		run:    run,
+		opts:   opts,
 	}
 }
 
@@ -77,6 +86,10 @@ func (le *leaderElection) Name() string {
 	return le.name
 }
 
+func (le *leaderElection) kind() string {
+	return "Lease"
+}
+
 // Helpers
 // Lease configuration
 func (le *leaderElection) leaseConfig() leaderelection.LeaderElectionConfig {
@@ -95,7 +108,7 @@ func (le *leaderElection) leaseConfig() leaderelection.LeaderElectionConfig {
 func (le *leaderElection) leaseLock() *resourcelock.LeaseLock {
 	opts := le.opts
 	return &resourcelock.LeaseLock{
-		LeaseMeta: v1.ObjectMeta{
+		LeaseMeta: metav1.ObjectMeta{
 			Name:        le.name,
 			Namespace:   opts.Namespace,
 			Annotations: opts.Annotations,
@@ -104,7 +117,7 @@ func (le *leaderElection) leaseLock() *resourcelock.LeaseLock {
 		Client: le.kube.Clientset().CoordinationV1(),
 		LockConfig: resourcelock.ResourceLockConfig{
 			Identity:      hostname(),
-			EventRecorder: nil,
+			EventRecorder: le.events.Recorder(),
 		},
 	}
 }
@@ -113,13 +126,35 @@ func (le *leaderElection) leaseLock() *resourcelock.LeaseLock {
 func (le *leaderElection) callbacks() leaderelection.LeaderCallbacks {
 	return leaderelection.LeaderCallbacks{
 		OnStartedLeading: func(ctx context.Context) {
-			logger.Info().Msg("🏆 Became leader, starting controller...")
+			le.events.Recorder().Eventf(
+				&corev1.ObjectReference{
+					Name:      le.name,
+					Namespace: le.opts.Namespace,
+					Kind:      le.kind(),
+				}, corev1.EventTypeNormal, "LeaderElected", "%s became leader", hostname(),
+			)
+
+			logger.Info().Msgf("%s 🏆 Became leader, starting controller...", hostname())
 			le.run(ctx)
 		},
 		OnStoppedLeading: func() {
-			logger.Info().Msg("👋 Stopped leading - lease released")
+			le.events.Recorder().Eventf(
+				&corev1.ObjectReference{
+					Name:      le.name,
+					Namespace: le.opts.Namespace,
+					Kind:      le.kind(),
+				}, corev1.EventTypeWarning, "LeaderLost", "%s lost leadership", hostname(),
+			)
+			logger.Info().Msgf("%s👋 Stopped leading - lease released", hostname())
 		},
 		OnNewLeader: func(identity string) {
+			le.events.Recorder().Eventf(
+				&corev1.ObjectReference{
+					Name:      le.name,
+					Namespace: le.opts.Namespace,
+					Kind:      le.kind(),
+				}, corev1.EventTypeNormal, "NewLeaderElected", "%s elected as leader", hostname(),
+			)
 			logger.Info().Msgf("👑 New leader elected: %s", identity)
 		},
 	}
