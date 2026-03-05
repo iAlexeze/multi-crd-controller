@@ -12,6 +12,11 @@ import (
 
 	clientV1alpha1 "github.com/ialexeze/kubernetes-crd-example/pkg/config/clientset/v1alpha1"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/manager"
+ 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/leader"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
 type startup struct {
@@ -21,7 +26,19 @@ type startup struct {
 	manager    *manager.Manager
 }
 
-func buildManager(cfg *config.Config, scheme *runtime.Scheme) *startup {
+func buildManager(cfg *config.Config) *startup {
+	// ── Add scheme ─────────────────────────────────────────────────────────────
+	// Register both built-in types and the CRD types.
+	// The scheme is needed by the CRD informer to decode API responses
+	// into typed Go structs (Example *Project).
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		logger.Fatal().Err(err).Msg("failed to add client-go scheme")
+	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		logger.Fatal().Err(err).Msg("failed to add CRD scheme")
+	}
+	
 	// create domain components
 	var components []domain.Component
 
