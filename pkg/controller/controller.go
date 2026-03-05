@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
@@ -20,6 +21,7 @@ type Controller struct {
 	events   *events.Recorder
 	queue    workqueue.TypedRateLimitingInterface[string]
 	workers  int
+	wg       sync.WaitGroup
 }
 
 var _ domain.Component = (*Controller)(nil)
@@ -63,11 +65,29 @@ func (c *Controller) Start(ctx context.Context) error {
 }
 
 func (c *Controller) Run(ctx context.Context) {
-	// Start workers
 	logger.Info().Msgf("starting %d workers", c.workers)
-	for j := 0; j < c.workers; j++ {
-		go wait.UntilWithContext(ctx, c.runWorker, time.Second)
+
+	// Start workers
+	for i := 0; i < c.workers; i++ {
+		c.wg.Add(1)
+		go func() {
+			defer c.wg.Done()
+			wait.UntilWithContext(ctx, c.runWorker, time.Second)
+		}()
 	}
+
+	// BLOCK until leadership is lost
+	<-ctx.Done()
+
+	logger.Info().Msg("leadership lost — draining workers...")
+
+	// Stop accepting new items
+	c.queue.ShutDown()
+
+	// Wait for all workers to finish
+	c.wg.Wait()
+
+	logger.Info().Msg("controller drained and stopped")
 }
 
 // Shutdown gracefully stops the Controller

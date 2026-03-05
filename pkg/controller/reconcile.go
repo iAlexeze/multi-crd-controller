@@ -91,7 +91,8 @@ func (c *Controller) reconcileNormal(ctx context.Context, project *v1alpha1.Proj
 			corev1.EventTypeNormal,
 			"ProjectReconciled",
 			"%s project reconciled successfully", project.Name,
-	)}
+		)
+	}
 	logger.Debug().Msgf("Normal reconciliation for %s", project.Name)
 	return nil
 }
@@ -108,6 +109,7 @@ func (c *Controller) handleDeletion(ctx context.Context, project *v1alpha1.Proje
 			corev1.EventTypeWarning,
 			"ProjectDelete",
 			"%s project deleted from %s namespace", project.Name, project.Namespace,
-	)}
+		)
+	}
 	return nil
 }

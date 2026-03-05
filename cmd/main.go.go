@@ -5,6 +5,7 @@ import (
 
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
+	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/leader"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -36,13 +37,30 @@ func main() {
 	}
 
 	// create domain components and build manager
-	mgr := buildManager(cfg, scheme)
+	startup := buildManager(cfg, scheme)
 
 	// Start all manager components
-	if err = mgr.Start(ctx); err != nil {
-		logger.Fatal().AnErr("manager startup error", err)
-	}
+	go func() {
+		if err = startup.manager.Start(ctx); err != nil {
+			logger.Fatal().AnErr("manager startup error", err)
+		}
+	}()
+
+	// start leader election as postStartHook AFTER manager is ready
+	startup.manager.AddPostStartHook(func(ctx context.Context) {
+		leader := leader.NewLeaderElection(
+			startup.kube,
+			startup.events,
+			func(ctx context.Context) { startup.controller.Run(ctx) }, // controller run
+			leader.Options{
+				Namespace:     cfg.Cluster().Namespace,
+				LeaseDuration: cfg.Leader().LeaseDuration,
+				RenewDeadline: cfg.Leader().RenewDeadline,
+				RetryPeriod:   cfg.Leader().RetryPeriod,
+			})
+		leader.Start(ctx)
+	})
 
 	// Keep running until cancelled
-	mgr.Wait()
+	startup.manager.Wait()
 }

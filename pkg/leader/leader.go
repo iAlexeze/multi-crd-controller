@@ -136,7 +136,7 @@ func (le *leaderElection) callbacks() leaderelection.LeaderCallbacks {
 				)
 			}
 
-			logger.Info().Msgf("%s 🏆 Became leader, starting controller...", hostname())
+			logger.Info().Msgf("%s 🏆 became leader, starting controller...", hostname())
 			le.run(ctx)
 		},
 		OnStoppedLeading: func() {

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/controller"
@@ -13,11 +11,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	clientV1alpha1 "github.com/ialexeze/kubernetes-crd-example/pkg/config/clientset/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/leader"
 	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/manager"
 )
 
-func buildManager(cfg *config.Config, scheme *runtime.Scheme) *manager.Manager {
+type startup struct {
+	events     *events.Recorder
+	controller *controller.Controller
+	kube       *kubeclient.Kubeclient
+	manager    *manager.Manager
+}
+
+func buildManager(cfg *config.Config, scheme *runtime.Scheme) *startup {
 	// create domain components
 	var components []domain.Component
 
@@ -47,20 +51,7 @@ func buildManager(cfg *config.Config, scheme *runtime.Scheme) *manager.Manager {
 
 	// controller
 	ctrl := controller.NewController(informer, events, cfg.Cluster().Workers)
-	components = append(components, ctrl)
-
-	// leader election
-	leader := leader.NewLeaderElection(
-		kube,
-		events,
-		func(ctx context.Context) { ctrl.Run(ctx) }, // controller run
-		leader.Options{
-			Namespace:     cfg.Cluster().Namespace,
-			LeaseDuration: cfg.Leader().LeaseDuration,
-			RenewDeadline: cfg.Leader().RenewDeadline,
-			RetryPeriod:   cfg.Leader().RetryPeriod,
-		})
-	components = append(components, leader)
+	components = append(components, ctrl) // Needed to get the controller informer synced and ready for manager to finish infrastructure setup
 
 	// Build and start manager
 	mgr := manager.NewManager(hs, cfg.Cluster().DefaultResync)
@@ -70,5 +61,10 @@ func buildManager(cfg *config.Config, scheme *runtime.Scheme) *manager.Manager {
 		mgr.Register(comp)
 	}
 
-	return mgr
+	return &startup{
+		events:     events,
+		controller: ctrl,
+		kube:       kube,
+		manager:    mgr,
+	}
 }

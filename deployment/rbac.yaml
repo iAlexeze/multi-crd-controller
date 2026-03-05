@@ -13,12 +13,19 @@ rules:
 - apiGroups: ["crd-example.ialexeze.ai"]
   resources: ["projects"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
 - apiGroups: ["crd-example.ialexeze.ai"]
   resources: ["projects/status"]
   verbs: ["get", "update", "patch"]
+
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
   verbs: ["get", "create", "update"]
+
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

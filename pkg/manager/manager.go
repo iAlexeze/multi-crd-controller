@@ -15,6 +15,7 @@ import (
 
 type Manager struct {
 	components []domain.Component
+	postStart  []func(context.Context)
 	timeout    time.Duration
 	done       chan struct{}
 	hs         *health.HealthServer
@@ -44,6 +45,11 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	logger.Info().Msg("✅ All services started successfully")
+
+	// Run post-start hooks (leader election goes here)
+	for _, hook := range m.postStart {
+		go hook(mCtx)
+	}
 
 	m.setReady()
 	logger.Info().Msg("controller is ready...")
@@ -90,6 +96,11 @@ func (m *Manager) gracefulShutdown(ctx context.Context, cancel context.CancelFun
 func (m *Manager) Register(c domain.Component) {
 	m.components = append(m.components, c)
 	logger.Info().Msgf("%s registered", c.Name())
+}
+
+// Add post start hooks for services that need to start after manager has started
+func (m *Manager) AddPostStartHook(hook func(context.Context)) {
+	m.postStart = append(m.postStart, hook)
 }
 
 // setReady sets the controller ready after all startup is completed

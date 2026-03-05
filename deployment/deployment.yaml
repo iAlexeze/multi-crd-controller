@@ -24,7 +24,8 @@ spec:
       containers:
       - name: controller
         resources: {}
-        image: ialexeze/project-controller:1.0.2
+        image: ialexeze/project-controller:1.0.0
+        imagePullPolicy: "Always"
         lifecycle:
           preStop:
             exec:

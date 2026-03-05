@@ -536,9 +536,6 @@ kubectl apply -f deployment/service.yaml  # optional
 ### Debugging Tips
 
 ```bash
-# Enable debug logging
-export LOG_LEVEL=debug
-
 # Check controller logs
 kubectl logs -f deployment/project-controller
 
