@@ -16,13 +16,13 @@ func (c *Controller) runWorker(ctx context.Context) {
 // processNextItem processes one item from the queue
 func (c *Controller) processNextItem(ctx context.Context) bool {
 	// Wait until there's an item or the queue is shut down
-	item, shutdown := c.queue.Get()
+	item, shutdown := c.q.Queue.Get()
 	if shutdown {
 		return false
 	}
 
 	// We call Done at the end of this function to mark the item as processed
-	defer c.queue.Done(item)
+	defer c.q.Queue.Done(item)
 
 	// Find the right reconciler
 	var targetReconciler domain.Reconciler
@@ -35,7 +35,7 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 
 	if targetReconciler == nil {
 		logger.Error().Str("resource", string(item.Resource)).Msg("no reconciler found")
-		c.queue.Forget(item)
+		c.q.Queue.Forget(item)
 		return true
 	}
 
@@ -46,10 +46,10 @@ func (c *Controller) processNextItem(ctx context.Context) bool {
 			Str("resource", string(item.Resource)).
 			Str("key", item.Key).
 			Msg("reconcile failed")
-		c.queue.AddRateLimited(item)
+		c.q.Queue.AddRateLimited(item)
 		return true
 	}
 
-	c.queue.Forget(item)
+	c.q.Queue.Forget(item)
 	return true
 }

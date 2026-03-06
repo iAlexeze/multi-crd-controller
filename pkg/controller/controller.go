@@ -15,98 +15,119 @@ import (
 	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/utils"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 )
+
+var _ domain.Component = (*Controller)(nil)
 
 type Controller struct {
 	kube        *kubeclient.Kubeclient
 	informers   []informer.InformerComponents
 	event       *event.Event
-	queue       workqueue.TypedRateLimitingInterface[queue.QueueItem]
+	q           *queue.Workqueue
 	wg          sync.WaitGroup
 	workers     int
 	reconcilers []domain.Reconciler
-	opts        CustomOptions
+	crds        []CRDInfo
 }
 
-var _ domain.Component = (*Controller)(nil)
+type CRDInfo struct {
+	Group   string
+	Version string
+	Kind    string
+	APIPath string
+}
+
+type ResourceRegistry struct {
+    entries map[domain.Resource]RegistryEntry
+}
+
+type RegistryEntry struct {
+    CRD       CRDInfo
+    Informer  informer.InformerComponents
+    Reconciler domain.Reconciler
+}
+
+
+func NewRegistry() *ResourceRegistry {
+    return &ResourceRegistry{
+        entries: make(map[domain.Resource]RegistryEntry),
+    }
+}
 
 func NewController(
 	kube *kubeclient.Kubeclient,
-	informers []informer.InformerComponents,
+	registry *ResourceRegistry,
 	event *event.Event,
-	queue *queue.Queue,
+	q *queue.Workqueue,
 	workers int,
-	opts CustomOptions,
 ) *Controller {
-	return &Controller{
+	c := &Controller{
 		kube:      kube,
-		informers: informers,
 		event:     event,
+		q:         q,
 		workers:   workers,
-		opts:      opts,
 	}
+
+	// Load registry entries
+    for _, entry := range registry.entries {
+        c.informers = append(c.informers, entry.Informer)
+        c.reconcilers = append(c.reconcilers, entry.Reconciler)
+        c.crds = append(c.crds, entry.CRD)
+    }
+
+	return c
 }
 
-type CustomOptions struct {
-	IsCustom bool
-	Group    string
-	Kind     string
-	Version  string
-}
 
 func (c *Controller) Start(ctx context.Context) error {
-	// Confirm CRD type presence in cluster if custom
-	if c.opts.IsCustom {
-		logger.Info().Msg("Custom controller setup detected")
-		required := map[string]string{
-			"Group":   c.opts.Group,
-			"Kind":    c.opts.Kind,
-			"Version": c.opts.Version,
-		}
+	// CRD check (you may later generalize this per-CRD)
+	for _, crd := range c.crds {
+		logger.Info().Msgf("checking CRD %s/%s (%s)...", crd.Group, crd.Version, crd.Kind)
 
-		if err := utils.RequireStrParams(required); err != nil {
-			return err
-		}
-
-		// Try with backoff
-		logger.Info().
-			Msgf("checking %s CRD: %s/%s...", c.opts.Kind, c.opts.Group, c.opts.Version)
-		if err := utils.RetryBackoff(
+		err := utils.RetryBackoff(
 			func() error {
 				return utils.WaitForCRD(
 					c.kube.RestConfig(),
-					c.opts.Group,
-					c.opts.Kind,
-					c.opts.Version,
+					crd.Group,
+					crd.Kind,
+					crd.Version,
 				)
-			}, 5, 2*time.Second,
-		); err != nil {
-			logger.Error().Err(err).
-				Msgf("%s CRD: %s/%s... not found", c.opts.Kind, c.opts.Group, c.opts.Version)
-			return err
+			},
+			5,
+			2*time.Second,
+		)
+
+		if err != nil {
+			return fmt.Errorf("CRD %s/%s (%s) not found: %w",
+				crd.Group, crd.Version, crd.Kind, err)
 		}
 
-		logger.Info().
-			Msgf("Found %s CRD: %s/%s...", c.opts.Kind, c.opts.Group, c.opts.Version)
+		logger.Info().Msgf("CRD %s/%s (%s) detected", crd.Group, crd.Version, crd.Kind)
 	}
 
-	if informer == nil {
-		return fmt.Errorf("controller error: informer not initialized")
+	if len(c.informers) == 0 {
+		return fmt.Errorf("controller error: no informers registered")
 	}
 
-	ctrl := informer.Controller()
+	var hasSyncedFns []cache.InformerSynced
 
-	// Start the Controller
-	logger.Debug().Msg("starting controller...")
-	go ctrl.Run(wait.NeverStop)
+	for _, inf := range c.informers {
+		ctrl := inf.Controller()
+		if ctrl == nil {
+			return fmt.Errorf("informer %s has no controller", inf.Name())
+		}
 
-	// Wait for cache to sync
-	logger.Debug().Msg("waiting for cache sync...")
-	if !cache.WaitForCacheSync(ctx.Done(), ctrl.HasSynced) {
-		return fmt.Errorf("failed to sync Controller cache")
+		logger.Debug().Msgf("starting informer controller: %s", inf.Name())
+		go ctrl.Run(wait.NeverStop)
+
+		hasSyncedFns = append(hasSyncedFns, ctrl.HasSynced)
 	}
-	logger.Info().Msg("Controller cache synced")
+
+	logger.Debug().Msg("waiting for all informer caches to sync...")
+	if !cache.WaitForCacheSync(ctx.Done(), hasSyncedFns...) {
+		return fmt.Errorf("failed to sync one or more informer caches")
+	}
+	logger.Info().Msg("all informer caches synced")
 
 	return nil
 }
@@ -133,7 +154,7 @@ func (c *Controller) RunOrDie(ctx context.Context) {
 	logger.Info().Msg("leadership lost — draining workers...")
 
 	// Stop accepting new items
-	c.queue.ShutDown()
+	c.q.Shutdown(ctx)
 
 	// Wait for all workers to finish
 	c.wg.Wait()
@@ -144,19 +165,37 @@ func (c *Controller) RunOrDie(ctx context.Context) {
 // RegisterReconcilers registers all reconcilers to controller
 func (c *Controller) RegisterReconcilers(r domain.Reconciler) {
 	c.reconcilers = append(c.reconcilers, r)
-	logger.Info().Msgf("%s reconciler egistered", r.Resource())
+	logger.Info().Msgf("[%s] reconciler registered", r.Resource())
 }
 
-// RegisterReconcilers registers all reconcilers to controller
-func (c *Controller) AddInformer(i *informer.Informer) {
+// RegisterInformer registers all informer to controller
+func (c *Controller) RegisterInformer(i informer.InformerComponents) {
 	c.informers = append(c.informers, i)
-	logger.Info().Msgf("%s informer added", i.Name())
+	logger.Info().Msgf("%s informer registered", i.Name())
+}
+
+func (c *Controller) RegisterCRD(info CRDInfo) {
+	c.crds = append(c.crds, info)
+	logger.Info().Msgf("%s/%s crd added", info.Group, info.Version)
+}
+
+func (r *ResourceRegistry) Register(
+    resource domain.Resource,
+    crd CRDInfo,
+    inf informer.InformerComponents,
+    rec domain.Reconciler,
+) {
+    r.entries[resource] = RegistryEntry{
+        CRD:        crd,
+        Informer:   inf,
+        Reconciler: rec,
+    }
 }
 
 // Shutdown gracefully stops the Controller
 func (c *Controller) Shutdown(ctx context.Context) {
 	logger.Info().Msg("shutting down Controller")
-	c.queue.ShutDown()
+	c.q.Shutdown(ctx)
 }
 
 // Controller name

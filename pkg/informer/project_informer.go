@@ -11,7 +11,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-
 func (p *ProjectInformer) watchProjectResources(ctx context.Context) (cache.Store, cache.Controller) {
 	return cache.NewInformerWithOptions(
 		cache.InformerOptions{
@@ -50,6 +49,12 @@ func (p *ProjectInformer) watchProjectResources(ctx context.Context) (cache.Stor
 var _ domain.Component = (*ProjectInformer)(nil)
 
 // Methods
+func (p *ProjectInformer) Start(ctx context.Context) error {
+	p.namespace = p.client.Namespace()
+	p.store, p.controller = p.watchProjectResources(ctx)
+	return nil
+}
+
 func (p *ProjectInformer) Controller() cache.Controller {
 	return p.controller
 }

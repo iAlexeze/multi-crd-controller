@@ -95,7 +95,7 @@ func (m *Manager) gracefulShutdown(ctx context.Context, cancel context.CancelFun
 // Register all components
 func (m *Manager) Register(c domain.Component) {
 	m.components = append(m.components, c)
-	logger.Info().Msgf("%s component registered", c.Name())
+	logger.Info().Msgf("[%s] component registered", c.Name())
 }
 
 // AddPostStartHook: for services that need to start after manager has started

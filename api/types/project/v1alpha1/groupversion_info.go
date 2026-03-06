@@ -20,7 +20,7 @@ var (
 	}
 
 	// API PATH
-	ApiPath = "/apis"
+	APIPath = "/apis"
 
 	// spec.names.plural
 	NamePlural = "projects"

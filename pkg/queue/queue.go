@@ -15,16 +15,16 @@ type QueueItem struct {
 	Resource domain.Resource
 }
 
-type Queue struct {
-	queue           workqueue.TypedRateLimitingInterface[QueueItem]
+type Workqueue struct {
+	Queue workqueue.TypedRateLimitingInterface[QueueItem]
 }
 
-func NewQueue() *Queue {
-	return &Queue{}
+func NewWorkqueue() *Workqueue {
+	return &Workqueue{Queue: workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[QueueItem]())}
 }
 
 // enqueue adds the object's key to the workqueue
-func (q *Queue) Enqueue(obj interface{}, resource domain.Resource) {
+func (q *Workqueue) Enqueue(obj interface{}, resource domain.Resource) {
 	// Handle tombstone (deleted objects)
 	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
 		obj = tombstone.Obj
@@ -36,24 +36,23 @@ func (q *Queue) Enqueue(obj interface{}, resource domain.Resource) {
 		return
 	}
 
-	q.queue.Add(QueueItem{Key: key, Resource: resource})
+	q.Queue.Add(QueueItem{Key: key, Resource: resource})
 	logger.Debug().Msgf("Enqueued: %s", key)
 }
 
-
 // Methods
-var _ domain.Component = (*Queue)(nil)
+var _ domain.Component = (*Workqueue)(nil)
 
-func (q *Queue) Start(ctx context.Context) error {
+func (q *Workqueue) Start(ctx context.Context) error {
 	logger.Info().Msg("right here in queue")
 	return nil
 }
-func (q *Queue) Shutdown(ctx context.Context) {
-	if q.queue != nil {
-		q.queue.ShutDown()
+func (q *Workqueue) Shutdown(ctx context.Context) {
+	if q.Queue != nil {
+		q.Queue.ShutDown()
 	}
 }
 
-func (q *Queue) Name() string {
+func (q *Workqueue) Name() string {
 	return "queue"
 }

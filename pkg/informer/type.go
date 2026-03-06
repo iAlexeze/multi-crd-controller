@@ -9,21 +9,20 @@ import (
 )
 
 type Informer struct {
-	name            string
-	namespace       string
-	resync          time.Duration
-	store           cache.Store
-	controller      cache.Controller
-	queue           queue.Queue
+	name       string
+	namespace  string
+	resync     time.Duration
+	store      cache.Store
+	controller cache.Controller
+	queue      queue.Workqueue
 }
 
 type ProjectInformer struct {
 	Informer
-	client   domain.ProjectsV1Alpha1nterface
+	client domain.ProjectsV1Alpha1nterface
 }
 
 type ManagedNamespaceInformer struct {
 	Informer
 	client domain.ManagedNamespaceV1Alpha1nterface
 }
-

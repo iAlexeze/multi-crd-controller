@@ -47,10 +47,15 @@ func (m *ManagedNamespaceInformer) watchManagedNamespaceResources(ctx context.Co
 	)
 }
 
-
 var _ domain.Component = (*ManagedNamespaceInformer)(nil)
 
 // Methods
+func (m *ManagedNamespaceInformer) Start(ctx context.Context) error {
+	m.namespace = m.client.Namespace()
+	m.store, m.controller = m.watchManagedNamespaceResources(ctx)
+	return nil
+}
+
 func (m *ManagedNamespaceInformer) Controller() cache.Controller {
 	return m.controller
 }

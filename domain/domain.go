@@ -44,9 +44,10 @@ type Reconciler interface {
 type Resource string
 
 const (
-	DefaultResync                     = 30 * time.Second
-	DefaultNamespace                  = "default"
-	ProjectResource          Resource = "Project"
-	ManagedNamespaceResource Resource = "ManagedNamespace"
+	DefaultResync                             = 30 * time.Second
+	DefaultNamespace                          = "default"
+	ProjectResource                  Resource = "Project"
+	ProjectInformerResource          Resource = "ProjectInformer"
+	ManagedNamespaceResource         Resource = "ManagedNamespace"
+	ManagedNamespaceInformerResource Resource = "ManagedNamespaceInformer"
 )
-
