@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )

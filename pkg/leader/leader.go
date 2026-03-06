@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/events"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/utils"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/event"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/kubeclient"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/leaderelection"
@@ -20,7 +20,7 @@ import (
 type leaderElection struct {
 	name       string
 	kube       *kubeclient.Kubeclient
-	events     *events.Recorder
+	event      *event.Event
 	cancelFunc context.CancelFunc
 	run        func(context.Context)
 
@@ -41,7 +41,7 @@ var _ domain.Component = (*leaderElection)(nil)
 
 func NewLeaderElection(
 	kube *kubeclient.Kubeclient,
-	events *events.Recorder,
+	event *event.Event,
 	run func(context.Context),
 	opts Options,
 ) *leaderElection {
@@ -50,11 +50,11 @@ func NewLeaderElection(
 	}
 
 	return &leaderElection{
-		name:   "resource-leader",
-		events: events,
-		kube:   kube,
-		run:    run,
-		opts:   opts,
+		name:  "resource-leader",
+		event: event,
+		kube:  kube,
+		run:   run,
+		opts:  opts,
 	}
 }
 
@@ -117,7 +117,7 @@ func (le *leaderElection) leaseLock() *resourcelock.LeaseLock {
 		Client: le.kube.Clientset().CoordinationV1(),
 		LockConfig: resourcelock.ResourceLockConfig{
 			Identity:      hostname(),
-			EventRecorder: le.events.Recorder(),
+			EventRecorder: le.event.Recorder(),
 		},
 	}
 }
@@ -126,8 +126,8 @@ func (le *leaderElection) leaseLock() *resourcelock.LeaseLock {
 func (le *leaderElection) callbacks() leaderelection.LeaderCallbacks {
 	return leaderelection.LeaderCallbacks{
 		OnStartedLeading: func(ctx context.Context) {
-			if le.events.Recorder() != nil {
-				le.events.Recorder().Eventf(
+			if le.event.Recorder() != nil {
+				le.event.Recorder().Eventf(
 					&corev1.ObjectReference{
 						Name:      le.name,
 						Namespace: le.opts.Namespace,
@@ -140,8 +140,8 @@ func (le *leaderElection) callbacks() leaderelection.LeaderCallbacks {
 			le.run(ctx)
 		},
 		OnStoppedLeading: func() {
-			if le.events.Recorder() != nil {
-				le.events.Recorder().Eventf(
+			if le.event.Recorder() != nil {
+				le.event.Recorder().Eventf(
 					&corev1.ObjectReference{
 						Name:      le.name,
 						Namespace: le.opts.Namespace,
@@ -152,8 +152,8 @@ func (le *leaderElection) callbacks() leaderelection.LeaderCallbacks {
 			logger.Info().Msgf("%s👋 Stopped leading - lease released", hostname())
 		},
 		OnNewLeader: func(identity string) {
-			if le.events.Recorder() != nil {
-				le.events.Recorder().Eventf(
+			if le.event.Recorder() != nil {
+				le.event.Recorder().Eventf(
 					&corev1.ObjectReference{
 						Name:      le.name,
 						Namespace: le.opts.Namespace,

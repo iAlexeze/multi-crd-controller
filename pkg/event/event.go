@@ -1,17 +1,17 @@
-package events
+package event
 
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/kubeclient"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/kubeclient"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
 )
 
-type Recorder struct {
+type Event struct {
 	name        string
 	kube        *kubeclient.Kubeclient
 	scheme      *runtime.Scheme
@@ -24,14 +24,14 @@ type Options struct {
 	Component string
 }
 
-var _ domain.Component = (*Recorder)(nil)
+var _ domain.Component = (*Event)(nil)
 
-func NewRecorder(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Options) *Recorder {
+func NewEvent(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Options) *Event {
 	if opts.Component == "" {
 		opts.Component = "project-controller"
 	}
 
-	return &Recorder{
+	return &Event{
 		name:   "event handler",
 		kube:   kube,
 		scheme: scheme,
@@ -39,7 +39,7 @@ func NewRecorder(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Optio
 	}
 }
 
-func (r *Recorder) Start(ctx context.Context) error {
+func (r *Event) Start(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -58,20 +58,20 @@ func (r *Recorder) Start(ctx context.Context) error {
 	return nil
 }
 
-func (r *Recorder) Shutdown(ctx context.Context) {
+func (r *Event) Shutdown(ctx context.Context) {
 	if r.broadcaster != nil {
 		r.broadcaster.Shutdown()
 	}
 }
 
-func (r *Recorder) Name() string {
+func (r *Event) Name() string {
 	return r.name
 }
 
-func (r *Recorder) Broadcaster() record.EventBroadcaster {
+func (r *Event) Broadcaster() record.EventBroadcaster {
 	return r.broadcaster
 }
 
-func (r *Recorder) Recorder() record.EventRecorder {
+func (r *Event) Recorder() record.EventRecorder {
 	return r.recorder
 }

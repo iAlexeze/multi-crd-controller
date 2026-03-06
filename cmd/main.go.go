@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/config"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/leader"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/config"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/leader"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 )
 
 func main() {
@@ -35,8 +35,8 @@ func main() {
 	startup.manager.AddPostStartHook(func(ctx context.Context) {
 		leader := leader.NewLeaderElection(
 			startup.kube,
-			startup.events,
-			func(ctx context.Context) { startup.controller.Run(ctx) }, // controller run
+			startup.event,
+			func(ctx context.Context) { startup.controller.RunOrDie(ctx) }, // controller run
 			leader.Options{
 				Namespace:     cfg.Cluster().Namespace,
 				LeaseDuration: cfg.Leader().LeaseDuration,

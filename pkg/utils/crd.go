@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,4 +30,19 @@ func WaitForCRD(cfg *rest.Config, group, kind, version string) error {
 		return fmt.Errorf("CRD %s.%s/%s not installed", kind, group, version)
 	}
 	return err
+}
+
+func RequireStrParams(required map[string]string) error {
+	var missing []string
+	for k, v := range required {
+		if v == "" {
+			missing = append(missing, k)
+		}
+	}
+
+	if len(missing) > 0 {
+		err := fmt.Sprintf("missing required parameter(s): %s", strings.Join(missing, ", "))
+		return fmt.Errorf("%s", err)
+	}
+	return nil
 }

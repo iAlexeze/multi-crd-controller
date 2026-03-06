@@ -3,9 +3,9 @@ package v1alpha1
 import (
 	"context"
 
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/api/types/v1alpha1"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/domain"
-	"github.com/ialexeze/kubernetes-crd-example/pkg/config/pkg/logger"
+	projectTypev1 "github.com/ialexeze/multi-crd-controller/pkg/config/api/types/project/v1alpha1"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -13,7 +13,7 @@ import (
 // Projects implements the project interface
 func (p *projectClient) Projects(namespace string) domain.ProjectInterface {
 	return &projectClient{
-		name:           "projects",
+		name:           string(domain.ProjectResource),
 		restClient:     p.restClient,
 		namespace:      namespace,
 		scheme:         p.scheme,
@@ -22,17 +22,17 @@ func (p *projectClient) Projects(namespace string) domain.ProjectInterface {
 }
 
 // API Functions
-func (p *projectClient) List(ctx context.Context, opts metav1.ListOptions) (*v1alpha1.ProjectList, error) {
+func (p *projectClient) List(ctx context.Context, opts metav1.ListOptions) (*projectTypev1.ProjectList, error) {
 	if p.restClient == nil {
 		logger.Fatal().Msg("restClient is nil - check client initialization")
 	}
 
-	result := v1alpha1.ProjectList{}
+	result := projectTypev1.ProjectList{}
 	logger.Debug().Msgf("(BEFORE) projects: %v", len(result.Items))
 	err := p.restClient.
 		Get().
 		Namespace(p.Namespace()).
-		Resource(p.Name()).
+		Resource("projects").
 		VersionedParams(&opts, p.parameterCodec).
 		Do(ctx).
 		Into(&result)
@@ -42,12 +42,12 @@ func (p *projectClient) List(ctx context.Context, opts metav1.ListOptions) (*v1a
 	return &result, err
 }
 
-func (p *projectClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*v1alpha1.Project, error) {
-	result := v1alpha1.Project{}
+func (p *projectClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*projectTypev1.Project, error) {
+	result := projectTypev1.Project{}
 	err := p.restClient.
 		Get().
 		Namespace(p.Namespace()).
-		Resource(p.Name()).
+		Resource("projects").
 		Name(name).
 		VersionedParams(&opts, p.parameterCodec).
 		Do(ctx).
@@ -56,12 +56,12 @@ func (p *projectClient) Get(ctx context.Context, name string, opts metav1.GetOpt
 	return &result, err
 }
 
-func (p *projectClient) Create(ctx context.Context, project *v1alpha1.Project) (*v1alpha1.Project, error) {
-	result := v1alpha1.Project{}
+func (p *projectClient) Create(ctx context.Context, project *projectTypev1.Project) (*projectTypev1.Project, error) {
+	result := projectTypev1.Project{}
 	err := p.restClient.
 		Post().
 		Namespace(p.Namespace()).
-		Resource(p.Name()).
+		Resource("projects").
 		Body(project).
 		Do(ctx).
 		Into(&result)
@@ -74,7 +74,7 @@ func (p *projectClient) Watch(ctx context.Context, opts metav1.ListOptions) (wat
 	return p.restClient.
 		Get().
 		Namespace(p.Namespace()).
-		Resource(p.Name()).
+		Resource("projects").
 		VersionedParams(&opts, p.parameterCodec).
 		Watch(ctx)
 }

@@ -46,7 +46,7 @@ A **GroupKind** is the identity of a Kubernetes type *without* a version.
 
 Example:
 
-- Group: `crd-example.ialexeze.ai`
+- Group: `platform.ialexeze.io`
 - Kind: `Project`
 
 This is the “type name” of your CRD.
@@ -75,7 +75,7 @@ It asks Kubernetes:
 If the CRD exists, you get a mapping like:
 
 ```
-/apis/crd-example.ialexeze.ai/v1alpha1/projects
+/apis/platform.ialexeze.io/v1alpha1/projects
 ```
 
 If the CRD does **not** exist, you get:

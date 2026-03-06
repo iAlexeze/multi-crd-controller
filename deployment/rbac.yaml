@@ -10,11 +10,11 @@ kind: ClusterRole
 metadata:
   name: project-controller
 rules:
-- apiGroups: ["crd-example.ialexeze.ai"]
+- apiGroups: ["platform.ialexeze.io"]
   resources: ["projects"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
-- apiGroups: ["crd-example.ialexeze.ai"]
+- apiGroups: ["platform.ialexeze.io"]
   resources: ["projects/status"]
   verbs: ["get", "update", "patch"]
 
