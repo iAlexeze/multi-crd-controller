@@ -6,6 +6,7 @@ import (
 
 	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
 	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/queue"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -13,6 +14,7 @@ type InformerComponents interface {
 	Store() cache.Store
 	Controller() cache.Controller
 	Name() string
+	RestClient() rest.Interface
 }
 
 // NewProjectInformer() returns a new ProjectInformer

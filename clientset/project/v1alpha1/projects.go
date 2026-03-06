@@ -2,10 +2,13 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
 	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/kubeclient"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 )
 
@@ -16,27 +19,53 @@ type projectClient struct {
 	name           string
 	scheme         *runtime.Scheme
 	parameterCodec runtime.ParameterCodec
+	opts Options
+}
+
+type Options struct {
+	Group string
+	Version string
+	APIPath string
+	Namespace string
 }
 
 var _ domain.ProjectInterface = (*projectClient)(nil)
 var _ domain.Component = (*projectClient)(nil)
 
-func NewProjectClient(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, namespace string) *projectClient {
+func NewProjectClient(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Options) *projectClient {
 
 	return &projectClient{
 		name:           string(domain.ProjectResource),
 		kube:           kube,
-		namespace:      namespace,
 		scheme:         scheme,
 		parameterCodec: runtime.NewParameterCodec(scheme), // create a parameterCodec from scheme
 	}
 }
 
+// Entry point
 func (p *projectClient) Start(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	p.restClient = p.kube.RestClient()
+
+	switch {
+	case p.opts.APIPath == "":
+		p.opts.APIPath = "/apis"
+	case p.opts.Group == "", p.opts.Version == "", p.opts.Namespace == "":
+		return fmt.Errorf("required variables: Group, Version, Namespace")
+	}
+
+	// Build restclient
+	cfg := rest.CopyConfig(p.kube.RestConfig())
+	cfg.GroupVersion = &schema.GroupVersion{
+		Group: p.opts.Group, 
+		Version: p.opts.Version,
+	}
+
+	cfg.APIPath = p.opts.APIPath
+	cfg.NegotiatedSerializer = serializer.NewCodecFactory(p.scheme)
+	p.restClient, _ = rest.RESTClientFor(cfg)
+
 	return nil
 }
 

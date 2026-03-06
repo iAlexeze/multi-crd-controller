@@ -45,10 +45,10 @@ func buildManager(cfg *config.Config) *startupCfg {
 	components = append(components, hs)
 
 	// kube
-	kube := kubeclient.NewKubeclient(true, kubeclient.Options{
+	kube := kubeclient.NewKubeclient(kubeclient.Options{
 		Kubeconfig: cfg.Cluster().KubeconfigPath,
-		Masterurl:  cfg.Cluster().MasterURL,
-		Scheme:     scheme,
+		Masterurl: cfg.Cluster().MasterURL,
+		Scheme: scheme,
 	})
 	components = append(components, kube)
 
@@ -57,10 +57,20 @@ func buildManager(cfg *config.Config) *startupCfg {
 	components = append(components, wq)
 
 	// clients
-	projectsClient := projectsClientV1alpha1.NewProjectClient(kube, scheme, cfg.Cluster().Namespace)
+	projectsClient := projectsClientV1alpha1.NewProjectClient(kube, scheme, projectsClientV1alpha1.Options{
+		Group: projectTypev1.Group,
+		Version: projectTypev1.Version,
+		APIPath: projectTypev1.APIPath,
+		Namespace: cfg.Cluster().Namespace,
+	})
 	components = append(components, projectsClient)
 
-	managedNamespaceClient := mnsClientV1alpha1.NewManagednsClient(kube, scheme, cfg.Cluster().Namespace)
+	managedNamespaceClient := mnsClientV1alpha1.NewManagednsClient(kube, scheme, mnsClientV1alpha1.Options{
+		Group: mnsTypev1.Group,
+		Version: mnsTypev1.Version,
+		APIPath: mnsTypev1.APIPath,
+		Namespace: cfg.Cluster().Namespace,
+	})
 	components = append(components, managedNamespaceClient)
 
 	// informers

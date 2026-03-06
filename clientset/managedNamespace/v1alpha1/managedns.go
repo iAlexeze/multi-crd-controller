@@ -2,10 +2,13 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
 	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/kubeclient"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 )
 
@@ -16,27 +19,54 @@ type managednsClient struct {
 	name           string
 	scheme         *runtime.Scheme
 	parameterCodec runtime.ParameterCodec
+	opts Options
 }
 
 var _ domain.ManagedNamespaceInterface = (*managednsClient)(nil)
 var _ domain.Component = (*managednsClient)(nil)
 
-func NewManagednsClient(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, namespace string) *managednsClient {
+
+type Options struct {
+	Group string
+	Version string
+	APIPath string
+	Namespace string
+}
+
+func NewManagednsClient(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Options) *managednsClient {
 
 	return &managednsClient{
 		name:           string(domain.ManagedNamespaceResource),
 		kube:           kube,
-		namespace:      namespace,
 		scheme:         scheme,
 		parameterCodec: runtime.NewParameterCodec(scheme), // create a parameterCodec from scheme
 	}
 }
 
-func (p *managednsClient) Start(ctx context.Context) error {
+// Entry point
+func (m *managednsClient) Start(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	p.restClient = p.kube.RestClient()
+
+	switch {
+	case m.opts.APIPath == "":
+		m.opts.APIPath = "/apis"
+	case m.opts.Group == "", m.opts.Version == "", m.opts.Namespace == "":
+		return fmt.Errorf("required variables: Group, Version, Namespace")
+	}
+
+	// Build restclient
+	cfg := rest.CopyConfig(m.kube.RestConfig())
+	cfg.GroupVersion = &schema.GroupVersion{
+		Group: m.opts.Group, 
+		Version: m.opts.Version,
+	}
+
+	cfg.APIPath = m.opts.APIPath
+	cfg.NegotiatedSerializer = serializer.NewCodecFactory(m.scheme)
+	m.restClient, _ = rest.RESTClientFor(cfg)
+
 	return nil
 }
 
@@ -44,14 +74,14 @@ func (p *managednsClient) Start(ctx context.Context) error {
 func (c *managednsClient) Shutdown(ctx context.Context) {}
 
 // Getters
-func (p *managednsClient) Name() string {
-	return p.name
+func (m *managednsClient) Name() string {
+	return m.name
 }
 
-func (p *managednsClient) Namespace() string {
-	return p.namespace
+func (m *managednsClient) Namespace() string {
+	return m.namespace
 }
 
-func (p *managednsClient) RestClient() rest.Interface {
-	return p.restClient
+func (m *managednsClient) RestClient() rest.Interface {
+	return m.restClient
 }

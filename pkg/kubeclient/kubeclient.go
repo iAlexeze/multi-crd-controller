@@ -1,130 +1,108 @@
 package kubeclient
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	"github.com/ialexeze/multi-crd-controller/pkg/config/domain"
-	"github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+    "github.com/ialexeze/multi-crd-controller/pkg/config/domain"
+    "github.com/ialexeze/multi-crd-controller/pkg/config/pkg/logger"
+    "k8s.io/apimachinery/pkg/runtime"
+    "k8s.io/apimachinery/pkg/runtime/serializer"
+    "k8s.io/client-go/dynamic"
+    "k8s.io/client-go/kubernetes"
+    "k8s.io/client-go/rest"
+    "k8s.io/client-go/tools/clientcmd"
 )
 
 type Kubeclient struct {
-	isCustom   bool
-	name       string
-	restConfig *rest.Config
-	clientset  kubernetes.Interface
-	restClient rest.Interface
-
+    name       string
+    restConfig *rest.Config
+    clientset  kubernetes.Interface
+    dynamic    dynamic.Interface
+    scheme     *runtime.Scheme
 	Opts Options
 }
 
 type Options struct {
-	Kubeconfig string
-	Masterurl  string
-	Scheme     *runtime.Scheme
-	Group      string
-	Kind       string
-	Version    string
-	APIPath    string
+    Kubeconfig string
+    Masterurl  string
+    Scheme     *runtime.Scheme // REQUIRED
 }
 
 var _ domain.Component = (*Kubeclient)(nil)
 
-func NewKubeclient(isCustom bool, opts Options) *Kubeclient {
-	if !isCustom && opts.Scheme == nil {
-		opts.Scheme = scheme.Scheme
-	}
+func NewKubeclient(opts Options) *Kubeclient {
+    if opts.Scheme == nil {
+        panic("kubeclient.Options.Scheme cannot be nil")
+    }
 
-	return &Kubeclient{
-		name:     "kubeclient",
-		isCustom: isCustom,
-		Opts:     opts,
-	}
+    return &Kubeclient{
+        name:   "kubeclient",
+        scheme: opts.Scheme,
+    }
 }
 
 func (k *Kubeclient) Start(ctx context.Context) error {
-	cfg, err := k.buildConfig()
-	if err != nil {
-		return err
-	}
+    cfg, err := k.buildConfig()
+    if err != nil {
+        return err
+    }
 
-	// Populate Kubeclient's rest config
-	k.restConfig = cfg
+    // Store config
+    k.restConfig = cfg
 
-	// Build clientset and restClient conditonally
-	logger.Debug().Msg("creating clients...")
+    // Build core clientset
+    logger.Info().Msg("creating core clientset")
+    k.clientset, err = kubernetes.NewForConfig(cfg)
+    if err != nil {
+        return fmt.Errorf("failed to create clientset: %w", err)
+    }
 
-	// Default
-	logger.Info().Msg("clientset for leader election")
-	k.clientset, err = kubernetes.NewForConfig(k.restConfig)
-	if err != nil {
-		return err
-	}
+    // Build dynamic client
+    logger.Info().Msg("creating dynamic client")
+    k.dynamic, err = dynamic.NewForConfig(cfg)
+    if err != nil {
+        return fmt.Errorf("failed to create dynamic client: %w", err)
+    }
 
-	if k.isCustom {
-		logger.Info().Msg("rest client")
-		k.restClient, err = k.buildRestClient()
-		if err != nil {
-			return err
-		}
-
-		// Add scheme
-		if k.Opts.Scheme == nil {
-			return fmt.Errorf("scheme not defined: custom resource scheme cannot be nil")
-		}
-	}
-
-	return nil
+    return nil
 }
 
 func (k *Kubeclient) buildConfig() (*rest.Config, error) {
-	if k.Opts.Kubeconfig != "" {
-		return clientcmd.BuildConfigFromFlags(k.Opts.Masterurl, k.Opts.Kubeconfig)
-	}
-	return rest.InClusterConfig()
+    if k.restConfig != nil {
+        return k.restConfig, nil
+    }
+
+    if k.scheme == nil {
+        return nil, fmt.Errorf("scheme is nil in kubeclient")
+    }
+
+    var cfg *rest.Config
+    var err error
+
+    if k.Opts.Kubeconfig != "" {
+        cfg, err = clientcmd.BuildConfigFromFlags(k.Opts.Masterurl, k.Opts.Kubeconfig)
+    } else {
+        cfg, err = rest.InClusterConfig()
+    }
+    if err != nil {
+        return nil, err
+    }
+
+    // Ensure the config uses our global scheme
+    cfg.NegotiatedSerializer = serializer.NewCodecFactory(k.scheme)
+
+    return cfg, nil
 }
 
-func (k *Kubeclient) buildRestClient() (*rest.RESTClient, error) {
-	config := *k.restConfig
-
-	config.ContentConfig.GroupVersion = &schema.GroupVersion{
-		Group:   k.Opts.Group,
-		Version: k.Opts.Version,
-	}
-
-	if k.Opts.APIPath == "" {
-		k.Opts.APIPath = "/apis"
-	}
-
-	config.APIPath = k.Opts.APIPath
-	config.NegotiatedSerializer = serializer.NewCodecFactory(k.Opts.Scheme).WithoutConversion()
-	config.UserAgent = rest.DefaultKubernetesUserAgent()
-
-	return rest.RESTClientFor(&config)
-}
-
-// Methods
 func (k *Kubeclient) Shutdown(ctx context.Context) {}
 
-func (k *Kubeclient) Name() string {
-	return k.name
-}
+func (k *Kubeclient) Name() string { return k.name }
 
-func (k *Kubeclient) RestConfig() *rest.Config {
-	return k.restConfig
-}
+func (k *Kubeclient) RestConfig() *rest.Config { return k.restConfig }
 
-func (k *Kubeclient) Clientset() kubernetes.Interface {
-	return k.clientset
-}
+func (k *Kubeclient) Clientset() kubernetes.Interface { return k.clientset }
 
-func (k *Kubeclient) RestClient() rest.Interface {
-	return k.restClient
-}
+func (k *Kubeclient) Dynamic() dynamic.Interface { return k.dynamic }
+
+func (k *Kubeclient) Scheme() *runtime.Scheme { return k.scheme }
