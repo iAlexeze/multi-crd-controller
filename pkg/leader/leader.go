@@ -59,6 +59,10 @@ func NewLeaderElection(
 }
 
 func (le *leaderElection) Start(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// Create a cancellable context for the leader election
 	leaderCtx, cancel := context.WithCancel(ctx)
 	le.cancelFunc = cancel

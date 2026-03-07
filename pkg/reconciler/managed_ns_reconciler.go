@@ -49,8 +49,13 @@ func (r *ManagedNamespaceReconciler) Resource() domain.Resource {
 // Reconcile is called for every ManagedNamespace event.
 // key = "name" (cluster-scoped, no namespace prefix).
 func (r *ManagedNamespaceReconciler) Reconcile(ctx context.Context, key string) error {
+	// if err := ctx.Err(); err != nil {
+	// 	return nil // context cancelled — clean exit
+	// }
+	// Check if context is cancelled
+
 	if err := ctx.Err(); err != nil {
-		return nil // context cancelled — clean exit
+		return err
 	}
 
 	// Read from local cache
@@ -139,6 +144,11 @@ func (r *ManagedNamespaceReconciler) Reconcile(ctx context.Context, key string) 
 // reconcileNamespace ensures a Namespace exists with the correct labels.
 // Idempotent — safe to call on every reconcile.
 func (r *ManagedNamespaceReconciler) reconcileNamespace(ctx context.Context, mn *mnsTypev1.ManagedNamespace) error {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// Check if name exists
 	if mn.Name == "" {
 		return fmt.Errorf("ManagedNamespace name is empty")

@@ -43,6 +43,12 @@ func (r *ProjectReconciler) Resource() domain.Resource {
 
 // reconcile handles the actual business logic for a project
 func (r *ProjectReconciler) Reconcile(ctx context.Context, key string) error {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Split the key into namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid key format: %w", err)

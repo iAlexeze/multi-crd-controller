@@ -41,6 +41,7 @@ func (m *Manager) Start(ctx context.Context) error {
 			logger.Error().Err(err).Msgf("failed to start: %s", name)
 			return err
 		}
+		utils.Sleep(1)
 		logger.Info().Msgf("%s status: %v", name, utils.StatusOnline)
 	}
 
@@ -82,7 +83,7 @@ func (m *Manager) gracefulShutdown(ctx context.Context, cancel context.CancelFun
 			logger.Info().Msgf("%s status: %v", name, utils.StatusOffline)
 		}
 
-		logger.Info().Msg("⚠️  All services shut down gracefully")
+		logger.Info().Msg("🎉 All services shut down gracefully")
 
 		// Notify Wait() to terminate
 		close(m.done)

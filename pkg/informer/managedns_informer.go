@@ -14,6 +14,11 @@ import (
 )
 
 func (m *ManagedNamespaceInformer) watchManagedNamespaceResources(ctx context.Context) (cache.Store, cache.Controller) {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, nil
+	}
+
 	return cache.NewInformerWithOptions(
 		cache.InformerOptions{
 			ListerWatcher: &cache.ListWatch{

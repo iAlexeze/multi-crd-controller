@@ -1,21 +1,20 @@
-# rbac.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: project-controller
+  name: multi-crd-controller
   namespace: ops-team-ns
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: project-controller
+  name: multi-crd-controller
 rules:
 - apiGroups: ["platform.ialexeze.io"]
-  resources: ["projects"]
+  resources: ["projects", "managednamespaces"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 - apiGroups: ["platform.ialexeze.io"]
-  resources: ["projects/status"]
+  resources: ["projects/status", "managednamespaces/status"]
   verbs: ["get", "update", "patch"]
 
 - apiGroups: ["coordination.k8s.io"]
@@ -25,17 +24,16 @@ rules:
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["create", "patch"]
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: project-controller
+  name: multi-crd-controller
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: project-controller
+  name: multi-crd-controller
 subjects:
 - kind: ServiceAccount
-  name: project-controller
+  name: multi-crd-controller
   namespace: ops-team-ns

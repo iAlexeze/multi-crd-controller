@@ -137,23 +137,6 @@ func (c *Controller) RunOrDie(ctx context.Context) {
 	logger.Info().Msg("controller drained and stopped")
 }
 
-// RegisterReconcilers registers all reconcilers to controller
-func (c *Controller) RegisterReconcilers(r domain.Reconciler) {
-	c.reconcilers = append(c.reconcilers, r)
-	logger.Info().Msgf("[%s] reconciler registered", r.Resource())
-}
-
-// RegisterInformer registers all informer to controller
-func (c *Controller) RegisterInformer(i informer.InformerComponents) {
-	c.informers = append(c.informers, i)
-	logger.Info().Msgf("%s informer registered", i.Name())
-}
-
-func (c *Controller) RegisterCRD(info CRDInfo) {
-	c.crds = append(c.crds, info)
-	logger.Info().Msgf("%s/%s crd added", info.Group, info.Version)
-}
-
 // Shutdown gracefully stops the Controller
 func (c *Controller) Shutdown(ctx context.Context) {
 	logger.Info().Msg("shutting down Controller")

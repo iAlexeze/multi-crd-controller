@@ -16,13 +16,18 @@ func (p *projectClient) Projects(namespace string) domain.ProjectInterface {
 		name:           string(domain.ProjectResource),
 		restClient:     p.restClient,
 		namespace:      namespace,
-		scheme:         p.scheme,
 		parameterCodec: p.parameterCodec,
 	}
 }
 
 // API Functions
 func (p *projectClient) List(ctx context.Context, opts metav1.ListOptions) (*projectTypev1.ProjectList, error) {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Check if restClient is initialized
 	if p.restClient == nil {
 		logger.Fatal().Msg("restClient is nil - check client initialization")
 	}
@@ -43,6 +48,16 @@ func (p *projectClient) List(ctx context.Context, opts metav1.ListOptions) (*pro
 }
 
 func (p *projectClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*projectTypev1.Project, error) {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Check if restClient is initialized
+	if p.restClient == nil {
+		logger.Fatal().Msg("restClient is nil - check client initialization")
+	}
+
 	result := projectTypev1.Project{}
 	err := p.restClient.
 		Get().
@@ -57,6 +72,16 @@ func (p *projectClient) Get(ctx context.Context, name string, opts metav1.GetOpt
 }
 
 func (p *projectClient) Create(ctx context.Context, project *projectTypev1.Project) (*projectTypev1.Project, error) {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Check if restClient is initialized
+	if p.restClient == nil {
+		logger.Fatal().Msg("restClient is nil - check client initialization")
+	}
+
 	result := projectTypev1.Project{}
 	err := p.restClient.
 		Post().
@@ -70,6 +95,16 @@ func (p *projectClient) Create(ctx context.Context, project *projectTypev1.Proje
 }
 
 func (p *projectClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Check if restClient is initialized
+	if p.restClient == nil {
+		logger.Fatal().Msg("restClient is nil - check client initialization")
+	}
+
 	opts.Watch = true
 	return p.restClient.
 		Get().

@@ -13,6 +13,11 @@ import (
 func (r *ManagedNamespaceReconciler) patchStatus(
 	ctx context.Context, mn *mnsTypev1.ManagedNamespace,
 ) error {
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	body, err := json.Marshal(map[string]interface{}{
 		"status": map[string]interface{}{
 			"phase":      mn.Status.Phase,

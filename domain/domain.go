@@ -28,13 +28,6 @@ type Reconciler interface {
 	// Reconcile handles the actual business logic for a resource
 	Reconcile(ctx context.Context, key string) error
 
-	// Informer returns the informer for this resource type
-	// The controller uses this to register event handlers
-	// Informer() cache.Store
-
-	// // Controller returns the controller for this resource type
-	// Controller() cache.Controller
-
 	// Resource() returns the resource name or kind for the reconciler
 	Resource() Resource
 }

@@ -20,10 +20,11 @@ type Kubeclient struct {
 	clientset  kubernetes.Interface
 	dynamic    dynamic.Interface
 	scheme     *runtime.Scheme
+	Config     Config
 	Opts       Options
 }
 
-type Options struct {
+type Config struct {
 	Kubeconfig string
 	Masterurl  string
 	Scheme     *runtime.Scheme // REQUIRED
@@ -31,15 +32,15 @@ type Options struct {
 
 var _ domain.Component = (*Kubeclient)(nil)
 
-func NewKubeclient(opts Options) *Kubeclient {
-	if opts.Scheme == nil {
-		panic("kubeclient.Options.Scheme cannot be nil")
+func NewKubeclient(cfg Config) *Kubeclient {
+	if cfg.Scheme == nil {
+		panic("kubeclient.Config.Scheme cannot be nil")
 	}
 
 	return &Kubeclient{
 		name:   "kubeclient",
-		scheme: opts.Scheme,
-		Opts:   opts,
+		scheme: cfg.Scheme,
+		Config: cfg,
 	}
 }
 
@@ -78,23 +79,23 @@ func (k *Kubeclient) buildConfig() (*rest.Config, error) {
 		return nil, fmt.Errorf("scheme is nil in kubeclient")
 	}
 
-	var cfg *rest.Config
+	var restCfg *rest.Config
 	var err error
 
-	if k.Opts.Kubeconfig != "" {
+	if k.Config.Kubeconfig != "" {
 		logger.Info().Msg("using kubeconfig")
-		cfg, err = clientcmd.BuildConfigFromFlags(k.Opts.Masterurl, k.Opts.Kubeconfig)
+		restCfg, err = clientcmd.BuildConfigFromFlags(k.Config.Masterurl, k.Config.Kubeconfig)
 	} else {
-		cfg, err = rest.InClusterConfig()
+		restCfg, err = rest.InClusterConfig()
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	// Ensure the config uses our global scheme
-	cfg.NegotiatedSerializer = serializer.NewCodecFactory(k.scheme)
+	restCfg.NegotiatedSerializer = serializer.NewCodecFactory(k.scheme)
 
-	return cfg, nil
+	return restCfg, nil
 }
 
 func (k *Kubeclient) Shutdown(ctx context.Context) {}

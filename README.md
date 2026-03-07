@@ -12,8 +12,8 @@ Originally inspired by [@martin-helmich](https://github.com/martin-helmich/kuber
 
 | Resource | API Group | Version | Status |
 |----------|-----------|---------|--------|
-| `Project` | `crd-example.ialexeze.ai` | `v1alpha1` | ✅ Production Ready |
-| `ManagedNamespace` | `crd-example.ialexeze.ai` | `v1alpha1` | ✅ Production Ready |
+| `Project` | `platform.ialexeze.io` | `v1alpha1` | ✅ Production Ready |
+| `ManagedNamespace` | `platform.ialexeze.io` | `v1alpha1` | ✅ Production Ready |
 
 Adding more CRDs takes **minutes** – no controller rewrites, no code duplication.
 
@@ -28,7 +28,8 @@ flowchart TB
  subgraph API["Kubernetes API Server"]
   end
  subgraph Core["Core Components"]
-        KC["KubeClient (Generic)"]
+        KC["KubeClient"]
+        FC["SharedClientFactory"]
         EV["Event Recorder"]
         HS["Health Server"]
         WQ["Workqueue (Shared)"]
@@ -63,7 +64,8 @@ flowchart TB
   end
     CRDs L_CRDs_API_0@--> API
     API L_API_KC_0@--> KC
-    KC L_KC_PC_0@--> PC & MC
+    KC L_KC_PC_0@--> FC
+    FC L_FC_PC_0@--> PC & MC
     PC L_PC_PI_0@--> PI
     MC L_MC_MI_0@--> MI
     PI L_PI_STORE_0@--> STORE & WQ
@@ -73,7 +75,7 @@ flowchart TB
     W1 L_W1_DISPATCH_0@--> DISPATCH
     W2 L_W2_DISPATCH_0@--> DISPATCH
     W3 L_W3_DISPATCH_0@--> DISPATCH
-    DISPATCH --> REG
+    DISPATCH L_DISPATCH_REG_0@--> REG
     REG L_REG_R1_0@--> R1 & R2
     R1 L_R1_PR_0@--> PR
     R2 L_R2_MR_0@--> MR
@@ -87,13 +89,14 @@ flowchart TB
     style LE fill:#FF6D00,stroke:#333,stroke-width:2px,color:none
     style PR fill:#00C853,stroke:#333,stroke-width:2px,color:#FFFFFF
     style MR fill:#00C853,stroke:#333,stroke-width:2px,color:#FFFFFF
-    style CRDs fill:#C8E6C9,stroke:#333,stroke-width:2px
+    style CRDs fill:transparent,stroke:#333,stroke-width:2px
     style API fill:#00C853,stroke:#333,stroke-width:2px,color:#FFFFFF
 
     L_CRDs_API_0@{ animation: fast } 
     L_API_KC_0@{ animation: fast } 
     L_KC_PC_0@{ animation: fast } 
-    L_KC_MC_0@{ animation: fast } 
+    L_FC_PC_0@{ animation: fast } 
+    L_FC_MC_0@{ animation: fast } 
     L_PC_PI_0@{ animation: fast } 
     L_MC_MI_0@{ animation: fast } 
     L_PI_STORE_0@{ animation: fast } 
@@ -108,6 +111,7 @@ flowchart TB
     L_W1_DISPATCH_0@{ animation: fast } 
     L_W2_DISPATCH_0@{ animation: fast } 
     L_W3_DISPATCH_0@{ animation: fast } 
+    L_DISPATCH_REG_0@{ animation: fast } 
     L_REG_R1_0@{ animation: fast } 
     L_REG_R2_0@{ animation: fast } 
     L_R1_PR_0@{ animation: fast } 
@@ -122,10 +126,11 @@ flowchart TB
 ### 🔥 **Multi-CRD Support**
 A **registry-driven design** allows the controller to manage any number of CRDs. Each CRD contributes:
 - Its own API types
-- Its own client
-- Its own informer  
-- Its own reconciler
+- Its own informer
+- Its own reconciler  
 - Its own GVK metadata
+
+**Clients are generated automatically** by the SharedClientFactory – no manual client implementation needed!
 
 ### 🧠 **Smart Controller**
 A single controller processes events from **all CRDs**, dispatching them to the correct reconciler via the registry.
@@ -216,7 +221,7 @@ cp .env.example .env
 
 ### 2. Install CRDs
 ```bash
-kubectl apply -f crd-config/crd-project.yaml
+kubectl apply -f crd/bases/crd-project.yaml
 kubectl apply -f crd-config/crd-managedns.yaml
 ```
 
@@ -231,8 +236,8 @@ go run ./cmd/
 ### 4. Create Resources
 ```bash
 # Create projects and managed namespaces
-kubectl apply -f examples/project.yaml
-kubectl apply -f examples/managed-namespace.yaml
+kubectl apply -f crd/samples/project.yaml
+kubectl apply -f crd/samples/managedns.yaml
 ```
 
 ### 5. Deploy to Production
@@ -319,7 +324,25 @@ Generate deepcopy code:
 controller-gen object paths=./api/types/yourcrd/...
 ```
 
-### **Step 2: Create the Client**
+### **Step 2: Add your CRD interface in [domain](./domain/)**
+```go
+type YourCRDInterface interface {
+	List(ctx context.Context, opts metav1.ListOptions) (*yourcrdv1alpha.YourCRDList, error)
+	Get(ctx context.Context, name string, options metav1.GetOptions) (*yourcrdv1alpha.YourCRD, error)
+	Create(ctx context.Context, yourcrd *yourcrdv1alpha.YourCRD) (*yourcrdv1alpha.YourCRD, error)
+	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
+	Namespace() string
+	// ...
+}
+
+type YourCRDV1Alpha1nterface interface {
+	Projects(namespace string) YourCRDInterface
+	Namespace() string
+	RestClient() rest.Interface
+}
+```
+
+### **Step 3: Create the Client**
 
 ```
 clientset/yourcrd/v1alpha1/
@@ -344,28 +367,12 @@ import (
     v1alpha1 "github.com/ialexeze/multi-crd-controller/pkg/config/api/types/yourcrd/v1alpha1"
 )
 
-type YourCRDClient struct {
-    restClient rest.Interface
-    namespace  string
-    name       string
-    scheme     *runtime.Scheme
-}
-
-func NewYourCRDClient(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Options) *YourCRDClient {
-    return &YourCRDClient{
-        restClient: kube.RestClient(),
-        namespace:  opts.Namespace,
-        name:       "yourcrds",
-        scheme:     scheme,
-    }
-}
-
 func (c *YourCRDClient) List(ctx context.Context, opts metav1.ListOptions) (*v1alpha1.YourCRDList, error) {
     result := v1alpha1.YourCRDList{}
     err := c.restClient.
         Get().
         Namespace(c.namespace).
-        Resource(c.name).
+        Resource("yourcrd-plural-name").
         VersionedParams(&opts, runtime.NewParameterCodec(c.scheme)).
         Do(ctx).
         Into(&result)
@@ -375,7 +382,55 @@ func (c *YourCRDClient) List(ctx context.Context, opts metav1.ListOptions) (*v1a
 // Implement Get, Create, Update, Delete, Watch...
 ```
 
-### **Step 3: Create the Informer**
+**your_crd.go:**
+
+> **NOTE**: _Add 'YourCRDResource' to [domain.go](./domain/domain.go). Useful for [queuing](./pkg/queue/queue.go) and identifying your crd with the controller._
+
+```go
+type YourCRDClient struct {
+	restClient     rest.Interface
+	kube           *kubeclient.Kubeclient
+	opts           kubeclient.Options
+	name           string
+	namespace      string
+	parameterCodec runtime.ParameterCodec
+}
+
+func NewYourCRDClient(kube *kubeclient.Kubeclient, opts kubeclient.Options) *YourCRDClient {
+    return &YourCRDClient{
+        name:           string(domain.YourCRDResource),
+        kube:           kube,
+        opts:           opts,
+    }
+}
+
+// Entry point - started by manager in main.go
+func (c *YourCRDClient) Start(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// create a parameterCodec from scheme
+	c.parameterCodec = c.kube.RuntimeParameterCodec()
+
+	// Assign rest client from shared client factory
+	restClient, err := c.kube.SharedClientFactory(c.opts)
+	if err != nil {
+		return err
+	}
+
+	c.restClient = restClient
+	return nil
+}
+
+// Implement Shutdown, Name, Namespace and RestClient to satisfy the interface...
+func (c *YourCRDClient) Shutdown(ctx context.Context) {}
+func (c *YourCRDClient) Name() string { return c.name }
+func (c *YourCRDClient) Namespace() string { return c.namespace }
+func (c *YourCRDClient) RestClient() rest.Interface { return c.restClient }
+```
+
+### **Step 4: Create the Informer**
 
 ```
 pkg/informer/yourcrd_informer.go
@@ -411,7 +466,7 @@ func NewYourCRDInformer(
 }
 ```
 
-### **Step 4: Create the Reconciler**
+### **Step 5: Create the Reconciler**
 
 ```
 pkg/reconciler/yourcrd_reconciler.go
@@ -476,17 +531,23 @@ func (r *YourCRDReconciler) Reconcile(ctx context.Context, key string) error {
 }
 ```
 
-### **Step 5: Register in `build_manager.go`**
+### **Step 6: Register in `build_manager.go`**
 
-Add these lines to your existing `build_manager.go`:
+Add these lines to your existing `cmd/build_manager.go`:
 
 ```go
+// In buildScheme()
+// Add your CRD to global scheme
+	if err := yourCRDTypev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+// In buildManager()
 // 1. Create client
-yourcrdClient := yourcrdClientV1alpha1.NewYourCRDClient(kube, scheme, yourcrdClientV1alpha1.Options{
+yourcrdClient := yourcrdClientV1alpha1.NewYourCRDClient(kube, kubeclient.Options{
     Group:     yourcrdTypev1.Group,
     Version:   yourcrdTypev1.Version,
     APIPath:   yourcrdTypev1.APIPath,
-    Namespace: cfg.Cluster().Namespace,
 })
 components = append(components, yourcrdClient)
 
@@ -518,7 +579,7 @@ reg.Register(
 )
 ```
 
-### **Step 6: Done! 🎉**
+### **Step 7: Done! 🎉**
 
 Your controller now supports the new CRD. No core changes needed!
 

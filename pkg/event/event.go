@@ -40,16 +40,19 @@ func NewEvent(kube *kubeclient.Kubeclient, scheme *runtime.Scheme, opts Options)
 }
 
 func (r *Event) Start(ctx context.Context) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
+	// Check if context is cancelled
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
+	// Create event broadcaster
 	r.broadcaster = record.NewBroadcaster(record.WithContext(ctx))
 	r.broadcaster.StartRecordingToSink(
 		&typedcorev1.EventSinkImpl{
 			Interface: r.kube.Clientset().CoreV1().Events(""),
 		})
 
+	// Create event recorder
 	r.recorder = r.broadcaster.NewRecorder(
 		r.scheme,
 		corev1.EventSource{
