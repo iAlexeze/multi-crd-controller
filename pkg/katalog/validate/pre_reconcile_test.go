@@ -10,18 +10,18 @@ import (
 
 func katalogWithPreReconcile(pr orktypes.PreReconcileConfig) *executor {
 	return newKatalogExec(map[string]orktypes.CRDEntry{
-			"app": {
-				APITypes: orktypes.APITypes{
-					Kind:    "Application",
-					Version: "v1",
-					Group:   "test.orkestra.katalog",
-				},
-				OperatorBox: orktypes.OperatorBoxConfig{
-					PreReconcile: &pr,
-				},
+		"app": {
+			APITypes: orktypes.APITypes{
+				Kind:    "Application",
+				Version: "v1",
+				Group:   "test.orkestra.katalog",
 			},
-		})
-	}
+			OperatorBox: orktypes.OperatorBoxConfig{
+				PreReconcile: &pr,
+			},
+		},
+	})
+}
 
 func TestValidatePreReconcile_NoConfig(t *testing.T) {
 	k := katalogWithPreReconcile(orktypes.PreReconcileConfig{})

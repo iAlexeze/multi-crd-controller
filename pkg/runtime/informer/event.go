@@ -1,3 +1,4 @@
+// pkg/informer/event.go
 package informer
 
 import (
@@ -6,9 +7,13 @@ import (
 	"github.com/orkspace/orkestra/pkg/logger"
 )
 
-// handleEvent resolves the GVK from the scheme and routes the event
-// to the correct per-CRD queue. Falls back to the default queue if
-// no per-CRD queue is registered for this GVK.
+// handleEvent resolves the GVK from the informer event and routes the object
+// to the appropriate workqueue.
+//
+// Pre-enqueue admission is handled by AllowEnqueue. Events that fail namespace,
+// queue behaviour, or enqueue-gate conditions are dropped before entering the
+// queue. Admitted events are then passed to enqueue, which selects the
+// per-CRD queue or falls back to the default queue.
 func (f *Factory) handleEvent(ctx context.Context, obj interface{}) {
 	// Block until factory is ready — List/Watch have started
 	<-f.ready
@@ -34,97 +39,32 @@ func (f *Factory) handleEvent(ctx context.Context, obj interface{}) {
 		return
 	}
 
-	// ── Tier 2b: Pre-enqueue condition filter ────────────────────────────
-	// Evaluate operatorBox.preReconcile.filter conditions before enqueue.
-	// Objects that fail the filter are dropped — they never enter the queue.
-	if !f.enqueueAllowed(ctx, gvkStr, obj) {
-		return
-	}
-
-	// Route to per-CRD queue if registered, otherwise fall back to default
-	wq, ok := f.queueRegistry.For(gvkStr)
-	if !ok {
-		logger.Warn().
-			Str("gvk", gvkStr).
-			Msg("no per-CRD queue registered — falling back to default queue")
-		f.defaultWq.Enqueue(obj, gvkStr)
-		return
-	}
-
-	wq.Enqueue(obj, gvkStr)
+	f.enqueue(gvkStr, obj, nil)
 }
 
-// handleUpdate routes an update event for oldObj→newObj to the correct queue.
-// When a sentinel-aware update filter is registered for the GVK, it is evaluated
-// first — both oldObj and newObj are available here for sentinel computation.
-// If the filter passes, EnqueueWithSentinels carries the sentinel map through.
-// When no update filter is registered, falls through to the standard enqueue path.
-func (f *Factory) handleUpdate(ctx context.Context, gvkStr string, oldObj, newObj interface{}) {
+// handleUpdate handles an informer update from oldObj to newObj.
+//
+// Update events are the point at which event-time sentinel values can be
+// computed because both the previous and current objects are available.
+// The computed sentinel context is passed through AllowEnqueue and, if the
+// event is admitted, through enqueue into the workqueue.
+//
+// Whether the event retains its identity through queue deduplication is
+// determined by the CRD's eventAware configuration in enqueue; it does not
+// affect whether the event is admitted here.
+func (f *Factory) handleUpdate(
+	ctx context.Context,
+	gvkStr string,
+	oldObj, newObj interface{},
+) {
 	<-f.ready
 
-	namespace := extractNamespace(newObj)
-	if !f.namespaceAllowed(gvkStr, namespace) {
-		logger.Debug().
-			Str("gvk", gvkStr).
-			Str("namespace", namespace).
-			Msg("informer: update dropped — namespace not allowed")
+	sentinels := f.ComputeSentinels(gvkStr, oldObj, newObj)
+	wq, _ := f.queueRegistry.For(gvkStr)
+
+	if !f.allowEnqueue(ctx, gvkStr, newObj, wq, sentinels) {
 		return
 	}
 
-	wq, qFound := f.queueRegistry.For(gvkStr)
-	sentinels := f.computeSentinels(gvkStr, oldObj, newObj)
-	allowed, hasUpdateFilter := f.allowEnqueue(ctx, gvkStr, newObj, wq, sentinels)
-
-	if hasUpdateFilter {
-		if !allowed {
-			return
-		}
-
-		eventAware := f.katalog.IsEventAware(gvkStr)
-
-		if !qFound {
-			logger.Warn().Str("gvk", gvkStr).Msg("no per-CRD queue — falling back to default queue")
-			if eventAware {
-				f.defaultWq.EnqueueWithEventSentinels(
-					newObj,
-					gvkStr,
-					sentinels,
-				)
-			} else {
-				f.defaultWq.EnqueueWithSentinels(
-					newObj,
-					gvkStr,
-					sentinels,
-				)
-			}
-
-			return
-		}
-		if eventAware {
-			wq.EnqueueWithEventSentinels(
-				newObj,
-				gvkStr,
-				sentinels,
-			)
-			return
-		}
-
-		wq.EnqueueWithSentinels(
-			newObj,
-			gvkStr,
-			sentinels,
-		)
-	}
-
-	// No update filter — standard path (same as handleEvent).
-	if !f.enqueueAllowed(ctx, gvkStr, newObj) {
-		return
-	}
-
-	if !qFound {
-		logger.Warn().Str("gvk", gvkStr).Msg("no per-CRD queue — falling back to default queue")
-		f.defaultWq.Enqueue(newObj, gvkStr)
-		return
-	}
-	wq.Enqueue(newObj, gvkStr)
+	f.enqueue(gvkStr, newObj, sentinels)
 }
