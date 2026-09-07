@@ -228,12 +228,13 @@ func konstructRuntime(kfg *konfig.Konfig, m *merger.Merger, ctx context.Context)
 	// a watch against the API server and populates its in-memory cache.
 	// Watch events are routed into per-CRD workqueues via handleEvent.
 	infFactory := informer.SharedInformerFactory(kube.RestConfig(), informer.FactoryOptions{
-		Provider:  provider,
-		Scheme:    scheme,
-		DefaultWq: defaultWq,
-		Konfig:    kfg,
-		Katalog:   kat,
-		ClientSet: cs,
+		Provider:      provider,
+		Scheme:        scheme,
+		DefaultWq:     defaultWq,
+		Konfig:        kfg,
+		Katalog:       kat,
+		ClientSet:     cs,
+		QueueRegistry: queueRegistry,
 	})
 
 	// ── 4c. Provider registry ─────────────────────────────────────────────────

@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/orkspace/orkestra/domain"
+	"github.com/orkspace/orkestra/pkg/kubeclient"
 	"github.com/orkspace/orkestra/pkg/runtime/sentinel"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // ── FailPolicy ────────────────────────────────────────────────────────────────────
@@ -91,10 +93,17 @@ func (g *GateConditions) HasConditions() bool {
 	return g != nil && (len(g.When) > 0 || len(g.Or) > 0)
 }
 
+// HasExternal reports whether any external calls are declared.
+func (g *GateConditions) HasExternal() bool {
+	return g != nil && len(g.External) > 0
+}
+
 // HasGate reports whether the gate has anything to evaluate — conditions or external calls.
 func (g *GateConditions) HasGate() bool {
-	// return g != nil && (len(g.When) > 0 || len(g.Or) > 0 || len(g.External) > 0)
-	return g != nil
+	return g != nil && (len(g.When) > 0 ||
+		len(g.Or) > 0 ||
+		len(g.External) > 0 ||
+		len(g.Sentinels) > 0)
 }
 
 // HasSentinels reports whether the gate has declared sentinels
@@ -118,6 +127,15 @@ func (g *GateConditions) SentinelContains(s string) bool {
 		}
 	}
 	return false
+}
+
+// DeclaredSentinels returns the sentinel names declared under a gate condition
+// Returns nil when no sentinels are declared. Safe on nil receiver.
+func (g *GateConditions) DeclaredSentinels() []string {
+	if g == nil {
+		return nil
+	}
+	return g.Sentinels
 }
 
 // SentinelsAllowed implements the fast-path shorthand for gate conditions
@@ -376,6 +394,43 @@ func (w WatchEntry) ToManagedResource() ManagedResource {
 	}
 }
 
+// ToCRDInfo converts a WatchEntry + resolved GVR to a kubeclient.CRDInfo
+// for NewDynamicListerWatcher. Namespace is set to the entry's declared namespace;
+// Namespaced is true when a namespace is declared (restricts the watch to that
+// namespace), false for a cluster-scoped watch (all namespaces).
+func (w WatchEntry) ToCRDInfo(gvr schema.GroupVersionResource) kubeclient.CRDInfo {
+	return kubeclient.CRDInfo{
+		Group:      gvr.Group,
+		Version:    gvr.Version,
+		Plural:     gvr.Resource,
+		Namespace:  w.Namespace,
+		Namespaced: w.Namespace != "",
+	}
+}
+
+// HasWatchSentinels returns true if this watch entry has enqueue gate sentinels
+func (e WatchEntry) HasWatchSentinels() bool {
+	return e.EnqueueGate != nil && len(e.EnqueueGate.DeclaredSentinels()) > 0
+}
+
+// GVKString returns the canonical group/version/kind string for this watch.
+func (w *WatchEntry) GVKString() string {
+	if w == nil {
+		return ""
+	}
+
+	gv, err := schema.ParseGroupVersion(w.APIVersion)
+	if err != nil {
+		return ""
+	}
+
+	return schema.GroupVersionKind{
+		Group:   gv.Group,
+		Version: gv.Version,
+		Kind:    w.Kind,
+	}.String()
+}
+
 // ── PreReconcileConfig ────────────────────────────────────────────────────────────
 
 // PreReconcileConfig groups the two pre-reconcile gates under operatorBox.preReconcile.
@@ -485,7 +540,7 @@ func (r *PreReconcileConfig) HasEnqueueGate() bool {
 
 // HasReconcileGate reports whether the reconcile gate has anything to evaluate.
 func (r *PreReconcileConfig) HasReconcileGate() bool {
-	return r != nil && (r.ReconcileGate.HasGate() || len(r.External) > 0)
+	return r != nil && (r.ReconcileGate.HasGate() || len(r.External) > 0 || r.ReconcileGate.HasSentinels() || r.ReconcileGate.IsEventAware())
 }
 
 // IsEventAware reports whether this reconcile gate requires per-event evaluation.
@@ -834,6 +889,22 @@ type OperatorBoxConfig struct {
 // Empty reports true when this operatorBox is empty
 func (box *OperatorBoxConfig) Empty() bool {
 	return box == nil
+}
+
+// GetWatchEntry returns the watch entry matching the secondary GVK.
+func (c *OperatorBoxConfig) GetWatchEntry(secondaryGVK string) *WatchEntry {
+	if c == nil || c.Watch == nil {
+		return nil
+	}
+
+	for i := range c.Watch {
+		gvk := c.Watch[i].GVKString()
+		if gvk == secondaryGVK {
+			return &c.Watch[i]
+		}
+	}
+
+	return nil
 }
 
 // HookDeclaration declares where a Go hook function lives.

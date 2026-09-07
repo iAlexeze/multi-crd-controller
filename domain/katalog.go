@@ -22,6 +22,9 @@ type Katalog interface {
 	// Returns true when the object should be enqueued, false when it should be dropped.
 	EvaluateEnqueueFilter(ctx context.Context, gvkString string, obj Object, cs kubernetes.Interface, sentinels map[string]string) bool
 
+	// EvaluateWatchEnqueueFilter evaluates a watch entry's enqueueGate.
+	EvaluateWatchEnqueueFilter(ctx context.Context, primaryGVK, secondaryGVK string, obj Object, cs kubernetes.Interface, sentinels map[string]string) bool
+
 	// EvaluatePreReconcile evaluates preReconcile.reconcileGate conditions for the named CRD.
 	// Returns (true, "") when conditions pass and the reconciler should run.
 	// Returns (false, reason) when gated — reconciler must not be called.
@@ -34,7 +37,7 @@ type Katalog interface {
 	// event identity rather than being coalesced with other events for the same
 	// object. This applies to the entire reconcileGate evaluation, not only
 	// sentinel conditions.
-	IsEventAware(gvkString string) bool
+	IsEventAware(obj Object, gvkString string) bool
 
 	// GetPreReconcileSentinels returns the sentinel names declared by
 	// preReconcile.sentinels for the named CRD.
@@ -43,7 +46,7 @@ type Katalog interface {
 	// from old and new objects. Sentinel declaration is owned by the Katalog;
 	// the informer does not maintain a separate sentinel configuration registry.
 	// Returns nil when the CRD is unknown or declares no sentinels.
-	GetPreReconcileSentinels(gvkString string) []string
+	GetPreReconcileSentinels(obj Object, gvkString string) []string
 
 	// CRD name lookups — resolve a GVK/GVR/kind/target string to the katalog CRD entry name.
 	GetNameByGVKString(gvkString string) string

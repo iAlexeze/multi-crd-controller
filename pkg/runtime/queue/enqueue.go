@@ -17,13 +17,47 @@ func (q *Workqueue) Enqueue(obj interface{}, gvk string) {
 	})
 }
 
-// EnqueueKey adds a pre-computed key directly to the workqueue.
+// EnqueueWithKey adds a pre-computed key directly to the workqueue.
 // Used when the key is resolved from an ownerReference or another indirect source.
-func (q *Workqueue) EnqueueKey(key, gvk string) {
+func (q *Workqueue) EnqueueWithKey(key, gvk string) {
 	q.addWithEval(QueueItem{
 		Key: key,
 		GVK: gvk,
 	})
+}
+
+// EnqueueWithKeySentinels adds a pre-computed key to the workqueue alongside
+// sentinel values computed at event time.
+//
+// This preserves normal queue deduplication. Sentinel values are stored
+// separately from QueueItem, so multiple events for the same Key/GVK may be
+// coalesced by the underlying workqueue.
+func (q *Workqueue) EnqueueWithKeySentinels(
+	key, gvk string,
+	sentinels map[string]string,
+) {
+	if key == "" {
+		return
+	}
+
+	q.enqueueWithSentinels(key, gvk, sentinels, false)
+}
+
+// EnqueueWithKeyEventSentinels adds a pre-computed key to the workqueue with
+// event-aware identity.
+//
+// Each invocation receives a unique EventID, so multiple events for the same
+// Key/GVK survive workqueue deduplication as separate work items. Sentinel
+// values are retained with that event until the item is finally forgotten.
+func (q *Workqueue) EnqueueWithKeyEventSentinels(
+	key, gvk string,
+	sentinels map[string]string,
+) {
+	if key == "" {
+		return
+	}
+
+	q.enqueueWithSentinels(key, gvk, sentinels, true)
 }
 
 // EnqueueWithSentinels adds a key to the workqueue alongside sentinel values

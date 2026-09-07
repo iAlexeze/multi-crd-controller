@@ -391,6 +391,20 @@ operatorBox:
           equals: "staging"
 ```
 
+### `preReconcile.sentinels`
+
+A list of sentinels available for use in this CRD preReconcile gates is declared here. Once declared, they can be used in enqueue and reconcile gates.
+
+```yaml
+operatorBox:
+  preReconcile:
+    sentinels:
+      - generationChanged
+      - labelsChanged
+      - annotationsChanged
+```
+
+
 ### `preReconcile.enqueueGate`
 
 Evaluated by the **informer** in `handleEvent` before the item enters the work queue. When the gate fires the object is silently dropped — it never reaches the kordinator or reconciler.

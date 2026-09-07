@@ -94,22 +94,39 @@ func (k *Katalog) EvaluateEnqueueFilter(ctx context.Context, gvk string, obj dom
 			return true // shared pre-reconcile external: always fail-open
 		}
 	}
-	g := pr.EnqueueGate
-	if pr.HasEnqueueGateExternal() {
-		if resolver, err = external.Run(ctx, gvk, resolver, g.External, cs); err != nil {
-			if g.FailPolicy == orktypes.FailPolicyClosed {
-				return false
-			}
-			return true
-		}
+
+	return k.evaluateGate(ctx, gvk, pr.EnqueueGate, resolver, cs, sentinels)
+}
+
+// EvaluateWatchEnqueueFilter evaluates a watch entry's enqueueGate.
+func (k *Katalog) EvaluateWatchEnqueueFilter(ctx context.Context, primaryGVK, secondaryGVK string, obj domain.Object, cs kubernetes.Interface, sentinels map[string]string) bool {
+	box := k.effectiveBox(obj, primaryGVK)
+	if box == nil {
+		return true
 	}
 
-	// Evaluate enqueueGate.sentinels (shorthand) - first match wins
-	if g.HasSentinels() {
-		return g.SentinelsAllowed(sentinels)
+	resolver := k.effectiveResolver(ctx, obj, nil, sentinels)
+	if resolver.Empty() {
+		return true
 	}
 
-	return orktypes.EvaluateConditions(resolver.Data(), g.WhenConditions(), g.OrConditions(), resolver.TemplateEvaluator())
+	// lookup gate for the watch entry
+	entry := k.LookupByGVKString(primaryGVK).Entry()
+	if entry == nil {
+		return true
+	}
+
+	watchEntry := box.GetWatchEntry(secondaryGVK)
+	if watchEntry == nil {
+		return true
+	}
+
+	g := watchEntry.EnqueueGate
+	if g == nil {
+		return true
+	}
+
+	return k.evaluateGate(ctx, secondaryGVK, g, resolver, cs, sentinels)
 }
 
 // EvaluateQueueBehaviourConditions completes the queue behaviour evaluation started by the
@@ -200,6 +217,44 @@ func preReconcileGateReason(pr *orktypes.PreReconcileConfig, resolver *orktmpl.R
 	return "or: no condition satisfied"
 }
 
+// evaluateGate evaluates a gate against the supplied resolver.
+//
+// Gate external runs first, then sentinel shorthand, then conditions.
+func (k *Katalog) evaluateGate(
+	ctx context.Context,
+	gvk string,
+	g *orktypes.GateConditions,
+	resolver *orktmpl.Resolver,
+	cs kubernetes.Interface,
+	sentinels map[string]string,
+) bool {
+	if resolver == nil {
+		return true
+	}
+
+	var err error
+	if g.HasExternal() {
+		if resolver, err = external.Run(ctx, gvk, resolver, g.External, cs); err != nil {
+			if g.FailPolicy == orktypes.FailPolicyClosed {
+				return false
+			}
+			return true
+		}
+	}
+
+	// Sentinel shorthand takes precedence over conditions.
+	if g.HasSentinels() {
+		return g.SentinelsAllowed(sentinels)
+	}
+
+	return orktypes.EvaluateConditions(
+		resolver.Data(),
+		g.WhenConditions(),
+		g.OrConditions(),
+		resolver.TemplateEvaluator(),
+	)
+}
+
 // IsEventAware reports whether the named CRD has opted into event-aware
 // reconcileGate evaluation.
 //
@@ -207,15 +262,23 @@ func preReconcileGateReason(pr *orktypes.PreReconcileConfig, resolver *orktmpl.R
 // event identity rather than being coalesced with other events for the same
 // object. This applies to the entire reconcileGate evaluation, not only
 // sentinel conditions.
-func (k *Katalog) IsEventAware(name string) bool {
+func (k *Katalog) IsEventAware(obj domain.Object, name string) bool {
 	if k == nil {
 		return false
 	}
 
-	if crd, ok := k.enabledCRDs[name]; ok {
-		if crd.HasAnyReconcileGate() {
-			return crd.PreReconcileCheck().IsEventAware()
-		}
+	box := k.effectiveBox(obj, name)
+	if box == nil {
+		return false
+	}
+
+	pr := box.PreReconcile
+	if pr == nil {
+		return false
+	}
+
+	if pr.HasReconcileGate() {
+		return pr.ReconcileGate.IsEventAware()
 	}
 
 	return false
@@ -228,14 +291,19 @@ func (k *Katalog) IsEventAware(name string) bool {
 // from old and new objects. Sentinel declaration is owned by the Katalog;
 // the informer does not maintain a separate sentinel configuration registry.
 // Returns nil when the CRD is unknown or declares no sentinels.
-func (k *Katalog) GetPreReconcileSentinels(gvkString string) []string {
+func (k *Katalog) GetPreReconcileSentinels(obj domain.Object, gvkString string) []string {
 	if k == nil {
 		return nil
 	}
-
-	if crd, ok := k.enabledCRDs[gvkString]; ok {
-		return crd.OperatorBox.PreReconcile.DeclaredSentinels()
+	box := k.effectiveBox(obj, gvkString)
+	if box == nil {
+		return nil
 	}
 
-	return nil
+	pr := box.PreReconcile
+	if pr == nil {
+		return nil
+	}
+
+	return pr.DeclaredSentinels()
 }

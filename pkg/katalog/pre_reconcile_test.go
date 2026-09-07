@@ -3,14 +3,21 @@ package katalog
 import (
 	"testing"
 
+	"github.com/orkspace/orkestra/domain"
+	"github.com/orkspace/orkestra/pkg/konfig"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
+func objForTest() domain.Object {
+	return domain.UnstructuredForTest()
+}
+
 func katalogWithPreReconcile(pr orktypes.PreReconcileConfig) *Katalog {
-	return &Katalog{
+	k := &Katalog{
 		enabledCRDs: map[string]orktypes.CRDEntry{
-			"app": {
+			gvkForTest(): {
 				APITypes: orktypes.APITypes{
 					Kind:    "Application",
 					Version: "v1",
@@ -22,6 +29,36 @@ func katalogWithPreReconcile(pr orktypes.PreReconcileConfig) *Katalog {
 			},
 		},
 	}
+
+	k.SetDefaults(konfig.NewDefaultKonfig())
+	k.SetGroupVersionKind()
+
+	return k
+}
+
+func gvkForTest() string {
+	return "test.orkestra.katalog/v1, Kind=Application"
+}
+
+func TestIsEventAware_InitialState(t *testing.T) {
+	k := katalogWithPreReconcile(orktypes.PreReconcileConfig{
+		ReconcileGate: &orktypes.GateConditions{
+			EventAware: true,
+		},
+	})
+
+	obj := objForTest()
+	gvk := gvkForTest()
+
+	box := k.effectiveBox(obj, gvk)
+	require.NotNil(t, box)
+	require.NotNil(t, box.PreReconcile)
+	require.NotNil(t, box.PreReconcile.ReconcileGate)
+
+	t.Logf("has gate: %v", box.PreReconcile.HasReconcileGate())
+	t.Logf("event aware: %v", box.PreReconcile.ReconcileGate.IsEventAware())
+
+	assert.True(t, k.IsEventAware(obj, gvk))
 }
 
 func TestIsEventAware(t *testing.T) {
@@ -38,7 +75,7 @@ func TestIsEventAware(t *testing.T) {
 					EventAware: true,
 				},
 			}),
-			gvk:      "app",
+			gvk:      gvkForTest(),
 			expected: true,
 		},
 		{
@@ -48,7 +85,7 @@ func TestIsEventAware(t *testing.T) {
 					EventAware: false,
 				},
 			}),
-			gvk:      "app",
+			gvk:      gvkForTest(),
 			expected: false,
 		},
 		{
@@ -63,7 +100,7 @@ func TestIsEventAware(t *testing.T) {
 					},
 				},
 			}),
-			gvk:      "app",
+			gvk:      gvkForTest(),
 			expected: false,
 		},
 		{
@@ -75,7 +112,7 @@ func TestIsEventAware(t *testing.T) {
 		{
 			name:     "nil katalog",
 			katalog:  nil,
-			gvk:      "app",
+			gvk:      gvkForTest(),
 			expected: false,
 		},
 	}
@@ -85,9 +122,9 @@ func TestIsEventAware(t *testing.T) {
 			var got bool
 
 			if tt.katalog == nil {
-				got = (*Katalog)(nil).IsEventAware(tt.gvk)
+				got = (*Katalog)(nil).IsEventAware(objForTest(), tt.gvk)
 			} else {
-				got = tt.katalog.IsEventAware(tt.gvk)
+				got = tt.katalog.IsEventAware(objForTest(), tt.gvk)
 			}
 
 			assert.Equal(t, tt.expected, got)
@@ -103,7 +140,7 @@ func TestGetPreReconcileSentinels_ReturnsDeclared(t *testing.T) {
 		},
 	})
 
-	sentinels := k.GetPreReconcileSentinels("app")
+	sentinels := k.GetPreReconcileSentinels(objForTest(), gvkForTest())
 
 	assert.Equal(t, []string{"generationChanged", "labelsChanged"}, sentinels)
 }
@@ -111,7 +148,7 @@ func TestGetPreReconcileSentinels_ReturnsDeclared(t *testing.T) {
 func TestGetPreReconcileSentinels_NoSentinels(t *testing.T) {
 	k := katalogWithPreReconcile(orktypes.PreReconcileConfig{})
 
-	sentinels := k.GetPreReconcileSentinels("app")
+	sentinels := k.GetPreReconcileSentinels(objForTest(), gvkForTest())
 
 	assert.Empty(t, sentinels)
 }
@@ -121,7 +158,7 @@ func TestGetPreReconcileSentinels_Unknown(t *testing.T) {
 		Sentinels: []string{"generationChanged"},
 	})
 
-	sentinels := k.GetPreReconcileSentinels("unknown")
+	sentinels := k.GetPreReconcileSentinels(objForTest(), "unknown")
 
 	assert.Nil(t, sentinels)
 }
@@ -129,7 +166,59 @@ func TestGetPreReconcileSentinels_Unknown(t *testing.T) {
 func TestGetPreReconcileSentinels_NilKatalog(t *testing.T) {
 	var k *Katalog
 
-	sentinels := k.GetPreReconcileSentinels("app")
+	sentinels := k.GetPreReconcileSentinels(objForTest(), gvkForTest())
 
 	assert.Nil(t, sentinels)
+}
+
+func TestEffectiveBox_ResolvesTargetSpecificOperatorBox(t *testing.T) {
+	targetEventAware := true
+	crdEventAware := false
+
+	k := &Katalog{
+		enabledCRDs: map[string]orktypes.CRDEntry{
+			"app": {
+				APITypes: orktypes.APITypes{
+					Kind:    "Application",
+					Version: "v1",
+					Group:   "test.orkestra.katalog",
+				},
+				OperatorBox: orktypes.OperatorBoxConfig{
+					PreReconcile: &orktypes.PreReconcileConfig{
+						ReconcileGate: &orktypes.GateConditions{
+							EventAware: crdEventAware,
+						},
+					},
+				},
+				Serve: &orktypes.ServeConfig{
+					Enabled: true,
+					Target: orktypes.ServeTargetValue{
+						Entries: map[string]*orktypes.ServeTargetConfig{
+							"canary": {
+								OperatorBox: &orktypes.OperatorBoxConfig{
+									PreReconcile: &orktypes.PreReconcileConfig{
+										ReconcileGate: &orktypes.GateConditions{
+											EventAware: targetEventAware,
+										},
+									}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	require.NoError(t, k.SetGroupVersionKind())
+
+	obj := objForTest()
+	obj.SetAnnotations(map[string]string{"orkestra.orkspace.io/serve-target": "canary"})
+
+	box := k.effectiveBox(obj, gvkForTest())
+
+	require.NotNil(t, box)
+	require.NotNil(t, box.PreReconcile)
+	require.NotNil(t, box.PreReconcile.ReconcileGate)
+
+	assert.True(t, box.PreReconcile.ReconcileGate.IsEventAware())
 }
