@@ -15,13 +15,11 @@ import (
 	"github.com/orkspace/orkestra/pkg/profiles"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -76,7 +74,7 @@ func Apply(ctx context.Context, kube kubeclient.Interface, owner domain.Object, 
 
 	if _, err = kube.Clientset().AppsV1().StatefulSets(namespace).Patch(
 		ctx, spec.Name, k8stypes.ApplyPatchType, body,
-		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: utils.BoolPtr(true)},
+		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: common.ResolveForceConflict(kube, spec.ForceConflict)},
 	); err != nil {
 		return fmt.Errorf("statefulset.Apply: %w", err)
 	}
@@ -149,6 +147,7 @@ func Resolve(src orktypes.StatefulSetTemplateSource, ownerName string, reg orkty
 		Volumes:         src.Volumes,
 		VolumeMounts:    src.VolumeMounts,
 		Sleep:           src.Sleep,
+		ForceConflict:   src.ForceConflict,
 	}
 
 	for _, vct := range src.VolumeClaimTemplates {
@@ -232,16 +231,6 @@ func resolveAccessModes(modes []string) []corev1.PersistentVolumeAccessMode {
 
 func buildStatefulSet(owner domain.Object, spec ResolvedStatefulSetSpec, ns string) *appsv1.StatefulSet {
 	spec.Labels = labels.StampOrkestraLabels(spec.Labels, owner.GetName(), owner.GetAnnotations())
-	apiVersion := ""
-	kind := ""
-	if u, ok := owner.(*unstructured.Unstructured); ok {
-		apiVersion = u.GetAPIVersion()
-		kind = u.GetKind()
-	} else {
-		gvk := owner.GetObjectKind().GroupVersionKind()
-		apiVersion = gvk.GroupVersion().String()
-		kind = gvk.Kind
-	}
 
 	replicas := spec.Replicas
 	container := corev1.Container{
@@ -289,20 +278,11 @@ func buildStatefulSet(owner domain.Object, spec ResolvedStatefulSetSpec, ns stri
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        spec.Name,
-			Namespace:   ns,
-			Labels:      spec.Labels,
-			Annotations: spec.Annotations,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         apiVersion,
-					Kind:               kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			Name:            spec.Name,
+			Namespace:       ns,
+			Labels:          spec.Labels,
+			Annotations:     spec.Annotations,
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas:    &replicas,

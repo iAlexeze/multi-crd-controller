@@ -14,7 +14,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/profiles"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,6 +30,11 @@ type ResolvedResourceQuotaSpec struct {
 	FromNamespace     string
 	Labels            map[string]string
 	Sleep             string
+
+	// ForceConflict, when true, sets Force: true when applying this resource,
+	// taking ownership of conflicting fields instead of returning a conflict error.
+	// Overrides the CRD-level ForceConflict setting.
+	ForceConflict *bool
 }
 
 // Create creates a ResourceQuota if it does not already exist.
@@ -98,7 +102,7 @@ func Apply(ctx context.Context, kube kubeclient.Interface, owner domain.Object, 
 
 	if _, err = kube.Clientset().CoreV1().ResourceQuotas(namespace).Patch(
 		ctx, spec.Name, k8stypes.ApplyPatchType, body,
-		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: utils.BoolPtr(true)},
+		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: common.ResolveForceConflict(kube, spec.ForceConflict)},
 	); err != nil {
 		return fmt.Errorf("resourcequota.Apply: %w", err)
 	}
@@ -231,6 +235,7 @@ func Resolve(src orktypes.ResourceQuotaTemplateSource, ownerName string, reg ork
 		FromNamespace:     src.FromNamespace,
 		Labels:            make(map[string]string),
 		Sleep:             src.Sleep,
+		ForceConflict:     src.ForceConflict,
 	}
 
 	for k, v := range src.Labels {
@@ -298,19 +303,10 @@ func buildResourceQuota(
 	spec.Labels = labels.StampOrkestraLabels(spec.Labels, owner.GetName(), owner.GetAnnotations())
 	return &corev1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      spec.Name,
-			Namespace: namespace,
-			Labels:    spec.Labels,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			Name:            spec.Name,
+			Namespace:       namespace,
+			Labels:          spec.Labels,
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 		Spec: corev1.ResourceQuotaSpec{
 			Hard: buildResourceList(hard),

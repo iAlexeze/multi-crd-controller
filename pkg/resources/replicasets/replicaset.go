@@ -15,7 +15,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/profiles"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -85,7 +84,7 @@ func Apply(ctx context.Context, kube kubeclient.Interface, owner domain.Object, 
 
 	if _, err = kube.Clientset().AppsV1().ReplicaSets(namespace).Patch(
 		ctx, spec.Name, k8stypes.ApplyPatchType, body,
-		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: utils.BoolPtr(true)},
+		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: common.ResolveForceConflict(kube, spec.ForceConflict)},
 	); err != nil {
 		return fmt.Errorf("replicaset.Apply: %w", err)
 	}
@@ -170,6 +169,7 @@ func Resolve(src orktypes.ReplicaSetTemplateSource, ownerName string, reg orktyp
 		Volumes:         src.Volumes,
 		VolumeMounts:    src.VolumeMounts,
 		Sleep:           src.Sleep,
+		ForceConflict:   src.ForceConflict,
 	}
 
 	if spec.Name == "" {
@@ -235,20 +235,11 @@ func buildReplicaSet(owner domain.Object, spec ResolvedReplicaSetSpec, namespace
 
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        spec.Name,
-			Namespace:   namespace,
-			Labels:      spec.Labels,
-			Annotations: spec.Annotations,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			Name:            spec.Name,
+			Namespace:       namespace,
+			Labels:          spec.Labels,
+			Annotations:     spec.Annotations,
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 		Spec: appsv1.ReplicaSetSpec{
 			Replicas: &replicas,

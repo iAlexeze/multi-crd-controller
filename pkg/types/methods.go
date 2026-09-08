@@ -89,6 +89,16 @@ func (c *CRDEntry) SkipStatusSubresource() bool {
 	return c.IgnoreStatusPatch
 }
 
+// ResolveForceConflict returns the effective force-conflict setting for a resource.
+// ForceConflict defaults to true when unset.
+func (c *CRDEntry) ResolveForceConflict() *bool {
+	defaultForceConflict := true
+	if c.ForceConflict == nil {
+		return &defaultForceConflict
+	}
+	return c.ForceConflict
+}
+
 // SkipObservedGeneration reports whether this CRD should ignore the
 // status.observedGeneration field during readiness checks.
 //

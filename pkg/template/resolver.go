@@ -310,7 +310,9 @@ func (r *Resolver) resolveProbes(src *orktypes.ProbesConfig) (*orktypes.ProbesCo
 //	Name      → ownerName + "-pod"      (applied later in pods.Resolve)
 //	Namespace → ownerNamespace          (applied here so downstream has it)
 func (r *Resolver) ResolvePodTemplate(src orktypes.PodTemplateSource) (orktypes.PodTemplateSource, error) {
-	resolved := orktypes.PodTemplateSource{}
+	resolved := orktypes.PodTemplateSource{
+		ForceConflict: src.ForceConflict,
+	}
 
 	var err error
 
@@ -369,7 +371,9 @@ func (r *Resolver) ResolvePodTemplate(src orktypes.PodTemplateSource) (orktypes.
 // Returns a new DeploymentTemplateSource with all expressions evaluated — safe to pass
 // directly to deployments.Resolve().
 func (r *Resolver) ResolveDeploymentTemplate(src orktypes.DeploymentTemplateSource) (orktypes.DeploymentTemplateSource, error) {
-	resolved := orktypes.DeploymentTemplateSource{}
+	resolved := orktypes.DeploymentTemplateSource{
+		ForceConflict: src.ForceConflict,
+	}
 
 	var err error
 
@@ -484,7 +488,9 @@ func (r *Resolver) ResolveDeploymentTemplate(src orktypes.DeploymentTemplateSour
 // Returns a new ReplicaSetTemplateSource with all expressions evaluated — safe to pass
 // directly to replicasets.Resolve().
 func (r *Resolver) ResolveReplicaSetTemplate(src orktypes.ReplicaSetTemplateSource) (orktypes.ReplicaSetTemplateSource, error) {
-	resolved := orktypes.ReplicaSetTemplateSource{}
+	resolved := orktypes.ReplicaSetTemplateSource{
+		ForceConflict: src.ForceConflict,
+	}
 
 	var err error
 
@@ -1826,6 +1832,8 @@ func (r *Resolver) ResolveClusterRoleTemplate(src orktypes.ClusterRoleTemplateSo
 // ResolveClusterRoleBindingTemplate resolves all template expressions in a ClusterRoleBindingTemplateSource.
 func (r *Resolver) ResolveClusterRoleBindingTemplate(src orktypes.ClusterRoleBindingTemplateSource) (orktypes.ClusterRoleBindingTemplateSource, error) {
 	resolved := orktypes.ClusterRoleBindingTemplateSource{
+		ForceConflict: src.ForceConflict,
+
 		Reconcile: src.Reconcile,
 	}
 	var err error
