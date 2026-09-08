@@ -13,7 +13,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/logger"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +30,11 @@ type ResolvedRoleSpec struct {
 	// Useful for autoscale testing, latency simulation, and chaos engineering.
 	// Accepts extended duration units (s, m, h, d, w, mo, y).
 	Sleep string
+
+	// ForceConflict, when true, sets Force: true when applying this resource,
+	// taking ownership of conflicting fields instead of returning a conflict error.
+	// Overrides the CRD-level ForceConflict setting.
+	ForceConflict *bool
 }
 
 // Create creates a Role if it does not already exist.
@@ -92,7 +96,7 @@ func Apply(ctx context.Context, kube kubeclient.Interface, owner domain.Object, 
 
 	if _, err = kube.Clientset().RbacV1().Roles(namespace).Patch(
 		ctx, spec.Name, k8stypes.ApplyPatchType, body,
-		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: utils.BoolPtr(true)},
+		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: common.ResolveForceConflict(kube, spec.ForceConflict)},
 	); err != nil {
 		return fmt.Errorf("role.Apply: %w", err)
 	}
@@ -160,10 +164,11 @@ func DeleteIfOwned(ctx context.Context, kube kubeclient.Interface,
 // Template expressions must already be evaluated by template.Resolver before calling.
 func Resolve(src orktypes.RoleTemplateSource, ownerName string) ResolvedRoleSpec {
 	spec := ResolvedRoleSpec{
-		Name:      src.Name,
-		Namespace: src.Namespace,
-		Labels:    make(map[string]string),
-		Sleep:     src.Sleep,
+		Name:          src.Name,
+		Namespace:     src.Namespace,
+		Labels:        make(map[string]string),
+		Sleep:         src.Sleep,
+		ForceConflict: src.ForceConflict,
 	}
 
 	if spec.Name == "" {
@@ -192,19 +197,10 @@ func buildRole(owner domain.Object, spec ResolvedRoleSpec, namespace string) *rb
 	spec.Labels = labels.StampOrkestraLabels(spec.Labels, owner.GetName(), owner.GetAnnotations())
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      spec.Name,
-			Namespace: namespace,
-			Labels:    spec.Labels,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			Name:            spec.Name,
+			Namespace:       namespace,
+			Labels:          spec.Labels,
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 		Rules: spec.Rules,
 	}

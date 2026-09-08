@@ -11,7 +11,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/logger"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -64,6 +63,11 @@ type ResolvedJobSpec struct {
 	// Useful for autoscale testing, latency simulation, and chaos engineering.
 	// Accepts extended duration units (s, m, h, d, w, mo, y).
 	Sleep string
+
+	// ForceConflict, when true, sets Force: true when applying this resource,
+	// taking ownership of conflicting fields instead of returning a conflict error.
+	// Overrides the CRD-level ForceConflict setting.
+	ForceConflict *bool
 }
 
 // Create creates a Job if it does not already exist.
@@ -160,6 +164,7 @@ func Resolve(src orktypes.JobTemplateSource, backoffLimit int, ownerName string,
 		Volumes:         src.Volumes,
 		VolumeMounts:    src.VolumeMounts,
 		Sleep:           src.Sleep,
+		ForceConflict:   src.ForceConflict,
 	}
 
 	if spec.Name == "" {
@@ -204,16 +209,7 @@ func buildJob(owner domain.Object, spec ResolvedJobSpec, namespace string) *batc
 			// deleted and the Job must outlive it to complete cleanup.
 			// The caller (run_jobs.go) is responsible for this distinction.
 			// We always set it here — the reconciler controls when to call Create.
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,

@@ -13,7 +13,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/logger"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,7 +83,7 @@ func Apply(ctx context.Context, kube kubeclient.Interface, owner domain.Object, 
 
 	if _, err = kube.Clientset().CoreV1().Pods(namespace).Patch(
 		ctx, spec.Name, k8stypes.ApplyPatchType, body,
-		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: utils.BoolPtr(true)},
+		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: common.ResolveForceConflict(kube, spec.ForceConflict)},
 	); err != nil {
 		if errors.IsInvalid(err) {
 			logger.Info().Str("pod", spec.Name).Msg("pod spec immutable — delete+recreate")
@@ -170,8 +169,10 @@ func DeleteIfOwned(ctx context.Context, kube kubeclient.Interface,
 // and cannot be overridden by the user.
 func Resolve(src orktypes.PodTemplateSource, ownerName string, reg orktypes.ProfileRegistry) ResolvedPodSpec {
 	spec := ResolvedPodSpec{
-		Labels:      make(map[string]string),
-		Annotations: make(map[string]string),
+		Labels:        make(map[string]string),
+		Annotations:   make(map[string]string),
+		Sleep:         src.Sleep,
+		ForceConflict: src.ForceConflict,
 	}
 
 	spec.Name = src.Name
@@ -213,20 +214,11 @@ func buildPod(owner domain.Object, spec ResolvedPodSpec, namespace string) *core
 	spec.Labels = labels.StampOrkestraLabels(spec.Labels, owner.GetName(), owner.GetAnnotations())
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        spec.Name,
-			Namespace:   namespace,
-			Labels:      spec.Labels,
-			Annotations: spec.Annotations,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			Name:            spec.Name,
+			Namespace:       namespace,
+			Labels:          spec.Labels,
+			Annotations:     spec.Annotations,
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 		Spec: corev1.PodSpec{
 			ImagePullSecrets:   common.ToPullSecrets(spec.ImagePullSecrets),

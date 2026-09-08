@@ -93,6 +93,15 @@ type Interface interface {
 	PatchLabels(ctx context.Context, obj runtime.Object, base, desired map[string]string) error
 	PatchAnnotations(ctx context.Context, obj runtime.Object, annotations map[string]string) error
 	PatchStatus(ctx context.Context, obj domain.Object, statusFields map[string]interface{}) error
+
+	// Generic Reconciler methods
+
+	//
+	// WithForceConflict returns a copy of this Interface with the CRD-level
+	// force-conflict attached. Called at construction time.
+	WithForceConflict(forceConflict *bool) Interface
+	// ForceConflict returns the CRD-level force-conflict setting.
+	ForceConflict() *bool
 }
 
 // Compile check — *Kubeclient must satisfy this.

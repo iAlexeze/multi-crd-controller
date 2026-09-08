@@ -63,7 +63,7 @@ func Apply(ctx context.Context, kube kubeclient.Interface, owner domain.Object, 
 
 	if _, err = kube.Clientset().CoreV1().PersistentVolumes().Patch(
 		ctx, spec.Name, k8stypes.ApplyPatchType, body,
-		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: utils.BoolPtr(true)},
+		metav1.PatchOptions{FieldManager: konfig.FieldManagerRuntime, Force: common.ResolveForceConflict(kube, spec.ForceConflict)},
 	); err != nil {
 		return fmt.Errorf("pv.Apply: %w", err)
 	}
@@ -122,6 +122,7 @@ func Resolve(src orktypes.PVTemplateSource, ownerName string) ResolvedPVSpec {
 		CSIVolumeHandle:  src.CSIVolumeHandle,
 		Labels:           make(map[string]string),
 		Sleep:            src.Sleep,
+		ForceConflict:    src.ForceConflict,
 	}
 
 	if len(spec.AccessModes) == 0 {

@@ -254,16 +254,7 @@ func buildIngress(owner domain.Object, spec ResolvedIngressSpec, ns string) *net
             Namespace:   ns,
             Labels:      spec.Labels,
             Annotations: spec.Annotations,
-            OwnerReferences: []metav1.OwnerReference{
-                {
-                    APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-                    Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-                    Name:               owner.GetName(),
-                    UID:                owner.GetUID(),
-                    Controller:         utils.BoolPtr(true),
-                    BlockOwnerDeletion: utils.BoolPtr(true),
-                },
-            },
+			OwnerReferences: common.ResolveOwnerReferences(owner),
         },
         Spec: networkingv1.IngressSpec{
             Rules: []networkingv1.IngressRule{

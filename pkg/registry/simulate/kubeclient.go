@@ -58,6 +58,7 @@ type FakeKubeclient struct {
 	eventRecorder kubeclient.EventRecorder
 	storeFor      func(schema.GroupVersionKind) cache.Store
 	indexerFor    func(schema.GroupVersionKind) cache.Indexer
+	forceConflict *bool
 }
 
 // dynamicObjects seeds the fake dynamic client's tracker at construction —
@@ -180,6 +181,13 @@ func (f *FakeKubeclient) WithIndexerFor(fn func(schema.GroupVersionKind) cache.I
 
 func (f *FakeKubeclient) GetIndexerFor() func(schema.GroupVersionKind) cache.Indexer {
 	return f.indexerFor
+}
+
+func (k *FakeKubeclient) ForceConflict() *bool { return new(bool) }
+func (f *FakeKubeclient) WithForceConflict(forceConflict *bool) kubeclient.Interface {
+	cp := *f
+	cp.forceConflict = forceConflict
+	return &cp
 }
 
 // AdvanceCycle increments the cycle counter. Call between simulated reconciles.

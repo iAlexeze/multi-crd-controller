@@ -211,14 +211,15 @@ func konstructRuntime(kfg *konfig.Konfig, m *merger.Merger, ctx context.Context)
 
 		provider.Register(object, func(k *kubeclient.Kubeclient) (informer.GenericClient, error) {
 			return k.NewClient(list, kubeclient.CRDInfo{
-				Kind:         crd.APITypes.Kind,
-				Group:        crd.APITypes.Group,
-				Version:      crd.APITypes.Version,
-				APIPath:      crd.APITypes.APIPath,
-				GroupVersion: crd.GroupVersion,
-				Plural:       crd.APITypes.Plural,
-				Namespace:    crd.Namespace,
-				Namespaced:   crd.IsNamespaced(),
+				Kind:          crd.APITypes.Kind,
+				Group:         crd.APITypes.Group,
+				Version:       crd.APITypes.Version,
+				APIPath:       crd.APITypes.APIPath,
+				GroupVersion:  crd.GroupVersion,
+				Plural:        crd.APITypes.Plural,
+				Namespace:     crd.Namespace,
+				Namespaced:    crd.IsNamespaced(),
+				ForceConflict: crd.ResolveForceConflict(),
 			})
 		})
 	}
@@ -336,14 +337,15 @@ func konstructRuntime(kfg *konfig.Konfig, m *merger.Merger, ctx context.Context)
 			Msgf("[DEBUG] CRD %s: location = %q\n", crd.APITypes.Kind, crd.APITypes.Location)
 		if crd.IsDynamic() {
 			lw := kube.NewDynamicListerWatcher(kubeclient.CRDInfo{
-				Kind:         crd.APITypes.Kind,
-				Group:        crd.APITypes.Group,
-				Version:      crd.APITypes.Version,
-				APIPath:      crd.APITypes.APIPath,
-				GroupVersion: crd.GroupVersion,
-				Plural:       crd.APITypes.Plural,
-				Namespace:    dynNamespace,
-				Namespaced:   crd.IsNamespaced(),
+				Kind:          crd.APITypes.Kind,
+				Group:         crd.APITypes.Group,
+				Version:       crd.APITypes.Version,
+				APIPath:       crd.APITypes.APIPath,
+				GroupVersion:  crd.GroupVersion,
+				Plural:        crd.APITypes.Plural,
+				Namespace:     dynNamespace,
+				Namespaced:    crd.IsNamespaced(),
+				ForceConflict: crd.ResolveForceConflict(),
 			}, kubeclient.ListOptions{
 				LabelSelector: labelSelector,
 				FieldSelector: fieldSelector,
@@ -377,7 +379,8 @@ func konstructRuntime(kfg *konfig.Konfig, m *merger.Merger, ctx context.Context)
 			logger.Debug().Str("gvk", gvk).Msg("wiring GenericReconciler factory")
 
 			// Attach hooks.args to a copy of the kube client; hooks read them via kube.Args().
-			var hookKube kubeclient.Interface = kube
+			var hookKube kubeclient.Interface = kube.
+				WithForceConflict(crd.ResolveForceConflict())
 			if args := crd.HooksArgs(); len(args) > 0 {
 				hookKube = kube.WithArgs(kubeclient.Args(args))
 			}
@@ -415,7 +418,8 @@ func konstructRuntime(kfg *konfig.Konfig, m *merger.Merger, ctx context.Context)
 				WithInformer(infCopy).
 				WithEventRecorder(ev).
 				WithStoreFor(infFactory.StoreFor).
-				WithIndexerFor(infFactory.IndexerFor)
+				WithIndexerFor(infFactory.IndexerFor).
+				WithForceConflict(crd.ResolveForceConflict())
 			if args := crd.ConstructorArgs(); len(args) > 0 {
 				ctorKube = ctorKube.WithArgs(kubeclient.Args(args))
 			}
@@ -439,7 +443,8 @@ func konstructRuntime(kfg *konfig.Konfig, m *merger.Merger, ctx context.Context)
 						WithInformer(infCopy).
 						WithEventRecorder(ev).
 						WithStoreFor(infFactory.StoreFor).
-						WithIndexerFor(infFactory.IndexerFor)
+						WithIndexerFor(infFactory.IndexerFor).
+						WithForceConflict(crdCopy.ResolveForceConflict())
 					if args := crdCopy.TargetConstructorArgs(targetName); len(args) > 0 {
 						targetKube = targetKube.WithArgs(kubeclient.Args(args))
 					}

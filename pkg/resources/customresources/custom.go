@@ -14,7 +14,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktmpl "github.com/orkspace/orkestra/pkg/template"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -70,6 +69,11 @@ type ResolvedCustomResourceSpec struct {
 	// Useful for autoscale testing, latency simulation, and chaos engineering.
 	// Accepts extended duration units (s, m, h, d, w, mo, y).
 	Sleep string `json:"sleep,omitempty" yaml:"sleep,omitempty"`
+
+	// ForceConflict, when true, sets Force: true when applying this resource,
+	// taking ownership of conflicting fields instead of returning a conflict error.
+	// Overrides the CRD-level ForceConflict setting.
+	ForceConflict *bool
 }
 
 // Create creates the custom resource described by spec if it does not already exist.
@@ -369,14 +373,7 @@ func buildUnstructured(spec ResolvedCustomResourceSpec, owner domain.Object, gvk
 	ownerIsNamespaced := owner.GetNamespace() != ""
 	sameNamespace := !ownerIsNamespaced || namespace == "" || namespace == owner.GetNamespace()
 	if !ownerGVK.Empty() && sameNamespace {
-		u.SetOwnerReferences([]metav1.OwnerReference{{
-			APIVersion:         ownerGVK.GroupVersion().String(),
-			Kind:               ownerGVK.Kind,
-			Name:               owner.GetName(),
-			UID:                owner.GetUID(),
-			Controller:         utils.BoolPtr(true),
-			BlockOwnerDeletion: utils.BoolPtr(true),
-		}})
+		u.SetOwnerReferences(common.ResolveOwnerReferences(owner))
 	}
 
 	// Other top-level fields (non-core) from the spec declaration.
@@ -423,15 +420,16 @@ func buildGVK(apiVersion, kind string) (schema.GroupVersionKind, error) {
 // Template expressions must already be evaluated by template.Resolver before calling.
 func Resolve(src orktypes.CustomResourceTemplateSource, ownerName string) ResolvedCustomResourceSpec {
 	spec := ResolvedCustomResourceSpec{
-		APIVersion: src.APIVersion,
-		Kind:       src.Kind,
-		Metadata:   src.Metadata,
-		Spec:       src.Spec,
-		Status:     src.Status,
-		Other:      src.Other,
-		HasStatus:  src.HasStatus,
-		Reconcile:  src.Reconcile,
-		Sleep:      src.Sleep,
+		APIVersion:    src.APIVersion,
+		Kind:          src.Kind,
+		Metadata:      src.Metadata,
+		Spec:          src.Spec,
+		Status:        src.Status,
+		Other:         src.Other,
+		HasStatus:     src.HasStatus,
+		Reconcile:     src.Reconcile,
+		Sleep:         src.Sleep,
+		ForceConflict: src.ForceConflict,
 	}
 
 	if spec.Metadata.Name == "" {

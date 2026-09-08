@@ -11,7 +11,6 @@ import (
 	"github.com/orkspace/orkestra/pkg/logger"
 	"github.com/orkspace/orkestra/pkg/resources/common"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
-	"github.com/orkspace/orkestra/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +31,11 @@ type ResolvedServiceAccountSpec struct {
 	// Useful for autoscale testing, latency simulation, and chaos engineering.
 	// Accepts extended duration units (s, m, h, d, w, mo, y).
 	Sleep string
+
+	// ForceConflict, when true, sets Force: true when applying this resource,
+	// taking ownership of conflicting fields instead of returning a conflict error.
+	// Overrides the CRD-level ForceConflict setting.
+	ForceConflict *bool
 }
 
 // Create creates a ServiceAccount if it does not already exist.
@@ -133,10 +137,11 @@ func DeleteIfOwned(ctx context.Context, kube kubeclient.Interface,
 // Template expressions must already be evaluated by template.Resolver before calling.
 func Resolve(src orktypes.ServiceAccountTemplateSource, ownerName string) ResolvedServiceAccountSpec {
 	spec := ResolvedServiceAccountSpec{
-		Name:      src.Name,
-		Namespace: src.Namespace,
-		Labels:    make(map[string]string),
-		Sleep:     src.Sleep,
+		Name:          src.Name,
+		Namespace:     src.Namespace,
+		Labels:        make(map[string]string),
+		Sleep:         src.Sleep,
+		ForceConflict: src.ForceConflict,
 	}
 
 	if spec.Name == "" {
@@ -156,19 +161,10 @@ func buildServiceAccount(owner domain.Object, spec ResolvedServiceAccountSpec, n
 	spec.Labels = labels.StampOrkestraLabels(spec.Labels, owner.GetName(), owner.GetAnnotations())
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      spec.Name,
-			Namespace: namespace,
-			Labels:    spec.Labels,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion:         owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-					Kind:               owner.GetObjectKind().GroupVersionKind().Kind,
-					Name:               owner.GetName(),
-					UID:                owner.GetUID(),
-					Controller:         utils.BoolPtr(true),
-					BlockOwnerDeletion: utils.BoolPtr(true),
-				},
-			},
+			Name:            spec.Name,
+			Namespace:       namespace,
+			Labels:          spec.Labels,
+			OwnerReferences: common.ResolveOwnerReferences(owner),
 		},
 	}
 }

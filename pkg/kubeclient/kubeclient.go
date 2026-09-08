@@ -311,3 +311,28 @@ func (k *Kubeclient) WithIndexerFor(fn func(schema.GroupVersionKind) cache.Index
 func (k *Kubeclient) GetIndexerFor() func(schema.GroupVersionKind) cache.Indexer {
 	return k.indexerFor
 }
+
+// WithForceConflict returns a copy of this Interface with the CRD-level
+// force-conflict attached.
+func (k *Kubeclient) WithForceConflict(forceConflict *bool) Interface {
+	cp := *k
+	info := k.Info
+	if info == nil {
+		info = &CRDInfo{}
+	} else {
+		// Make a copy to avoid mutating the original
+		copyInfo := *info
+		info = &copyInfo
+	}
+	info.ForceConflict = forceConflict
+	cp.Info = info
+	return &cp
+}
+
+// ForceConflict returns the CRD-level force-conflict setting.
+func (k *Kubeclient) ForceConflict() *bool {
+	if k == nil || k.Info == nil {
+		return nil
+	}
+	return k.Info.ForceConflict
+}

@@ -57,6 +57,10 @@ preReconcile:
     eventAware: true
 ```
 
+### Resource-level forceConflict
+
+All 20 supported resources can now declaratively set `forceConflict` at the resource level. Resource-level settings override the CRD-level setting, which defaults to the system default of `true`.
+
 ### Admission — conditional runtime query
 
 The admission webhook fetches live runtime data (health, metrics, uniqueness) only when a validation or mutation rule actually references it. CRDs with no `.health.*` or `.metrics.*` rules pay zero HTTP cost at admission time.

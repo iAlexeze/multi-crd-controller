@@ -705,25 +705,6 @@ func (r *GenericReconciler[PTR]) reconcileImpl(ctx context.Context, resolver *or
 	return nil
 }
 
-// namespaceAllowed returns true when the target namespace passes both the
-// restricted and allowed namespace checks for this CRD.
-// Called inside runResourceGroup before dispatching to each resource type.
-func (r *GenericReconciler[PTR]) namespaceAllowed(
-	ctx context.Context,
-	obj domain.Object,
-	targetNamespace string,
-) bool {
-	result := CheckNamespace(
-		ctx,
-		obj,
-		targetNamespace,
-		r.crd.RestrictedNamespaces,
-		r.crd.AllowedNamespaces,
-		r.crd.APITypes.Kind,
-	)
-	return result.Allowed
-}
-
 // handleDeletion runs cleanup then removes our finalizers.
 // Finalizers are never removed on error — object stays protected until
 // cleanup succeeds.
