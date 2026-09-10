@@ -186,10 +186,6 @@ operatorBox:
 
 `open` (default) passes through when the external call fails. `closed` denies.
 
-### `kubeclient.ToClient` is now cache-backed
-
-`Get` and `List` through `kubeclient.ToClient(kube)` are served from the informer cache for registered types. No change required in existing reconcilers.
-
 ---
 
 ## v0.7.15 — Artifact signing, gateway webhooks, multi-cluster, simulate --envtest, pre-reconcile gates

@@ -6,7 +6,7 @@ metadata:
   version: 0.1.0
   description: >
     WebApp operator — reconciler written in controller-runtime style.
-    The constructor wraps it with domain.ReconcilerFrom and kubeclient.ToClient
+    The constructor wraps it with domain.ReconcilerFrom and orkadapter.ToClient
     so it plugs into Orkestra without rewriting the reconciler body.
 
 spec:

@@ -24,6 +24,7 @@ import (
 	orktmpl "github.com/orkspace/orkestra/pkg/template"
 	orktypes "github.com/orkspace/orkestra/pkg/types"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 )
@@ -489,14 +490,14 @@ func (r *GenericReconciler[PTR]) reconcileCore(ctx context.Context, key string) 
 	}
 
 	// One atomic patch: diff serverLabels → desired. No-op if nothing changed.
-	if err := r.kube.PatchLabels(ctx, obj, serverLabels, obj.GetLabels()); err != nil {
+	if err := r.kube.PatchLabels(ctx, obj, serverLabels, obj.GetLabels(), metav1.PatchOptions{}); err != nil {
 		return err
 	}
 
 	// Annotations only ever add keys (managed-by, managed-since are write-once),
 	// so a plain Merge Patch with the desired map is correct here.
 	if labelMgr.EnsureManagedAnnotations(obj, r.crd.KatalogName) {
-		if err := r.kube.PatchAnnotations(ctx, obj, obj.GetAnnotations()); err != nil {
+		if err := r.kube.PatchAnnotations(ctx, obj, obj.GetAnnotations(), metav1.PatchOptions{}); err != nil {
 			return err
 		}
 	}

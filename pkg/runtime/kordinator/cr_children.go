@@ -243,7 +243,7 @@ func fetchCustomChildren(
 	var result []ChildSummary
 	for i := range srcs {
 		src := &srcs[i]
-		gvr, err := src.ResolveGVR(kube.Mapper())
+		gvr, err := src.ResolveGVR(kube.RESTMapper())
 		if err != nil {
 			logger.Warn().
 				Str("apiVersion", src.APIVersion).

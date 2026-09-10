@@ -22,7 +22,7 @@ is untouched — Orkestra takes over the infrastructure.
 
 Default mode (--mode toclient): zero changes to your Reconcile signature or
 call sites. SetupWithManager is removed; a two-line constructor using
-kubeclient.ToClient and domain.ReconcilerFrom is injected. Your reconciler
+orkadapter.ToClient and domain.ReconcilerFrom is injected. Your reconciler
 compiles and runs inside Orkestra with no other edits.
 
   ork migrate ./controller/webapp_controller.go -o ./my-operator
