@@ -97,7 +97,7 @@ func Create(ctx context.Context, kube kubeclient.Interface, owner domain.Object,
 	}
 
 	// Resolve GVR via the registry's RESTMapper (kubeclient exposes Mapper())
-	mapper := kube.Mapper()
+	mapper := kube.RESTMapper()
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return fmt.Errorf("custom.Create: resolving GVR for %s: %w", gvk.String(), err)
@@ -166,7 +166,7 @@ func Update(ctx context.Context, kube kubeclient.Interface, owner domain.Object,
 		return fmt.Errorf("custom.Update: invalid GVK: %w", err)
 	}
 
-	mapper := kube.Mapper()
+	mapper := kube.RESTMapper()
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return fmt.Errorf("custom.Update: resolving GVR for %s: %w", gvk.String(), err)
@@ -284,7 +284,7 @@ func DeleteIfOwned(ctx context.Context, kube kubeclient.Interface, owner domain.
 		return fmt.Errorf("custom.DeleteIfOwned: invalid GVK: %w", err)
 	}
 
-	mapper := kube.Mapper()
+	mapper := kube.RESTMapper()
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return fmt.Errorf("custom.DeleteIfOwned: resolving GVR for %s: %w", gvk.String(), err)

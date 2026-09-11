@@ -96,7 +96,7 @@ func readCustomResourceGroup(
 			continue
 		}
 
-		gvr, err := src.ResolveGVR(kube.Mapper())
+		gvr, err := src.ResolveGVR(kube.RESTMapper())
 		if err != nil {
 			logger.FromContext(ctx).Debug().
 				Str("resource", name).

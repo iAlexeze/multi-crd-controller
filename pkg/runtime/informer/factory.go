@@ -30,7 +30,7 @@ func OwnerNameIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // StoreFor returns the informer store for the given GVK, or nil if no informer
-// is registered for that type. Used by kubeclient.ToClient to serve cached reads.
+// is registered for that type. Used by orkadapter.ToClient to serve cached reads.
 func (f *Factory) StoreFor(gvk schema.GroupVersionKind) cache.Store {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

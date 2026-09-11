@@ -36,7 +36,7 @@ When you need full control of the reconcile loop — or you are migrating an exi
 
 ```go
 func NewAppReconciler(kube kubeclient.Interface) domain.Reconciler {
-    return &AppReconciler{client: kubeclient.ToClient(kube)}
+    return &AppReconciler{Client: orkadapter.ToClient(kube)}
 }
 ```
 

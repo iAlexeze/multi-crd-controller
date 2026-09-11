@@ -1,6 +1,6 @@
 ---
 title: "Declarative Operators: A New Model for Kubernetes Extensibility"
-date: 2026-07-23
+date: 2026-09-07
 weight: 1
 ---
 

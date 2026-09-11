@@ -65,7 +65,10 @@ type Kubeclient struct {
 	FakeClientset kubernetes.Interface
 }
 
-func (k *Kubeclient) Mapper() meta.RESTMapper {
+// Compile check — *Kubeclient must satisfy this.
+var _ Interface = (*Kubeclient)(nil)
+
+func (k *Kubeclient) RESTMapper() meta.RESTMapper {
 	return k.mapper
 }
 

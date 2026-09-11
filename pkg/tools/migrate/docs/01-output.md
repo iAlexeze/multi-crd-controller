@@ -27,12 +27,12 @@ The method itself is replaced with a comment:
 ```go
 func NewWebAppReconciler(kube kubeclient.Interface) domain.Reconciler {
     return domain.ReconcilerFrom(&WebAppReconciler{
-        client: kubeclient.ToClient(kube),
+        Client: orkadapter.ToClient(kube),
     })
 }
 ```
 
-`kubeclient.ToClient` returns a `client.Client` — the same type your struct field already holds. `domain.ReconcilerFrom` adapts the `ctrl.Request` signature to Orkestra's interface. Your `Reconcile` method body is completely untouched.
+`orkadapter.ToClient` returns a `client.Client` — the same type your struct field already holds. `domain.ReconcilerFrom` adapts the `ctrl.Request` signature to Orkestra's interface. Your `Reconcile` method body is completely untouched.
 
 ### Orkestra imports are injected
 
